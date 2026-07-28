@@ -6,405 +6,178 @@ Discarded input sections
  .text          0x00000000        0x0 build/main.o
  .data          0x00000000        0x0 build/main.o
  .bss           0x00000000        0x0 build/main.o
- .text.main     0x00000000       0x30 build/main.o
- .debug_info    0x00000000       0xdc build/main.o
- .debug_abbrev  0x00000000       0x79 build/main.o
- .debug_aranges
-                0x00000000       0x20 build/main.o
- .debug_rnglists
-                0x00000000       0x13 build/main.o
- .debug_macro   0x00000000       0x1a build/main.o
- .debug_macro   0x00000000      0xac0 build/main.o
- .debug_macro   0x00000000      0x34e build/main.o
- .debug_line    0x00000000       0x94 build/main.o
- .debug_str     0x00000000     0x38cb build/main.o
- .comment       0x00000000       0x27 build/main.o
- .debug_frame   0x00000000       0x2c build/main.o
+ .data          0x00000000        0x0 /tmp/ccQxOn6R.o
+ .bss           0x00000000        0x0 /tmp/ccQxOn6R.o
 
 Memory Configuration
 
 Name             Origin             Length             Attributes
+FLASH            0x08000000         0x00010000         xr
+RAM              0x20000000         0x00005000         xrw
 *default*        0x00000000         0xffffffff
 
 Linker script and memory map
 
 LOAD build/main.o
+LOAD /tmp/ccQxOn6R.o
 START GROUP
 LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a
 LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/../../../arm-none-eabi/lib/thumb/v7-m/nofp/libc.a
 END GROUP
-                [!provide]                        PROVIDE (__executable_start = SEGMENT_START ("text-segment", 0x8000))
-                0x00008000                        . = SEGMENT_START ("text-segment", 0x8000)
+                0x20005000                        _estack = (ORIGIN (RAM) + LENGTH (RAM))
 
-.interp
- *(.interp)
+.isr_vector     0x08000000       0xec
+                0x08000000                        . = ALIGN (0x4)
+ *(.isr_vector)
+ .isr_vector    0x08000000       0xec /tmp/ccQxOn6R.o
+                0x08000000                vector_table
+                0x080000ec                        . = ALIGN (0x4)
 
-.note.gnu.build-id
- *(.note.gnu.build-id)
+.text           0x080000ec       0x8c
+                0x080000ec                        . = ALIGN (0x4)
+ *(.text)
+ .text          0x080000ec       0x68 /tmp/ccQxOn6R.o
+                0x080000ec                RTC_Alarm_IRQHandler
+                0x080000ec                EXTI2_IRQHandler
+                0x080000ec                DebugMon_Handler
+                0x080000ec                TIM1_CC_IRQHandler
+                0x080000ec                HardFault_Handler
+                0x080000ec                SysTick_Handler
+                0x080000ec                PVD_IRQHandler
+                0x080000ec                PendSV_Handler
+                0x080000ec                NMI_Handler
+                0x080000ec                EXTI3_IRQHandler
+                0x080000ec                EXTI0_IRQHandler
+                0x080000ec                I2C2_EV_IRQHandler
+                0x080000ec                UsageFault_Handler
+                0x080000ec                ADC1_2_IRQHandler
+                0x080000ec                SPI1_IRQHandler
+                0x080000ec                TAMPER_IRQHandler
+                0x080000ec                DMA1_Channel4_IRQHandler
+                0x080000ec                USART3_IRQHandler
+                0x080000ec                RTC_IRQHandler
+                0x080000ec                DMA1_Channel7_IRQHandler
+                0x080000ec                CAN1_RX1_IRQHandler
+                0x080000ec                TIM4_IRQHandler
+                0x080000ec                I2C1_EV_IRQHandler
+                0x080000ec                DMA1_Channel6_IRQHandler
+                0x080000ec                TIM3_IRQHandler
+                0x080000ec                RCC_IRQHandler
+                0x080000ec                TIM1_TRG_COM_IRQHandler
+                0x080000ec                DMA1_Channel1_IRQHandler
+                0x080000ec                Default_Handler
+                0x080000ec                EXTI15_10_IRQHandler
+                0x080000ec                EXTI9_5_IRQHandler
+                0x080000ec                SPI2_IRQHandler
+                0x080000ec                MemManage_Handler
+                0x080000ec                SVC_Handler
+                0x080000ec                DMA1_Channel5_IRQHandler
+                0x080000ec                EXTI4_IRQHandler
+                0x080000ec                USB_LP_CAN1_RX0_IRQHandler
+                0x080000ec                USB_HP_CAN1_TX_IRQHandler
+                0x080000ec                DMA1_Channel3_IRQHandler
+                0x080000ec                TIM1_UP_IRQHandler
+                0x080000ec                WWDG_IRQHandler
+                0x080000ec                TIM2_IRQHandler
+                0x080000ec                TIM1_BRK_IRQHandler
+                0x080000ec                EXTI1_IRQHandler
+                0x080000ec                USART2_IRQHandler
+                0x080000ec                I2C2_ER_IRQHandler
+                0x080000ec                DMA1_Channel2_IRQHandler
+                0x080000ec                CAN1_SCE_IRQHandler
+                0x080000ec                FLASH_IRQHandler
+                0x080000ec                BusFault_Handler
+                0x080000ec                USART1_IRQHandler
+                0x080000ec                I2C1_ER_IRQHandler
+                0x080000ec                USBWakeUp_IRQHandler
+                0x080000f2                Reset_Handler
+ *(.text*)
+ .text.main     0x08000154       0x24 build/main.o
+                0x08000154                main
+ *(.rodata)
+ *(.rodata*)
+                0x08000178                        . = ALIGN (0x4)
 
-.hash
- *(.hash)
+.glue_7         0x08000178        0x0
+ .glue_7        0x08000178        0x0 linker stubs
 
-.gnu.hash
- *(.gnu.hash)
+.glue_7t        0x08000178        0x0
+ .glue_7t       0x08000178        0x0 linker stubs
 
-.dynsym
- *(.dynsym)
+.vfp11_veneer   0x08000178        0x0
+ .vfp11_veneer  0x08000178        0x0 linker stubs
 
-.dynstr
- *(.dynstr)
+.v4_bx          0x08000178        0x0
+ .v4_bx         0x08000178        0x0 linker stubs
 
-.gnu.version
- *(.gnu.version)
+.iplt           0x08000178        0x0
+ .iplt          0x08000178        0x0 build/main.o
 
-.gnu.version_d
- *(.gnu.version_d)
+.rel.dyn        0x08000178        0x0
+ .rel.iplt      0x08000178        0x0 build/main.o
 
-.gnu.version_r
- *(.gnu.version_r)
+.data           0x20000000        0x4 load address 0x08000178
+                0x20000000                        . = ALIGN (0x4)
+                0x20000000                        _sdata = .
+ *(.data)
+ *(.data*)
+ .data.dulip.0  0x20000000        0x4 build/main.o
+                0x20000004                        . = ALIGN (0x4)
+                0x20000004                        _edata = .
+                0x08000178                        _sidata = LOADADDR (.data)
 
-.rel.dyn        0x00008000        0x0
- *(.rel.init)
- *(.rel.text .rel.text.* .rel.gnu.linkonce.t.*)
- *(.rel.fini)
- *(.rel.rodata .rel.rodata.* .rel.gnu.linkonce.r.*)
- *(.rel.data.rel.ro .rel.data.rel.ro.* .rel.gnu.linkonce.d.rel.ro.*)
- *(.rel.data .rel.data.* .rel.gnu.linkonce.d.*)
- *(.rel.tdata .rel.tdata.* .rel.gnu.linkonce.td.*)
- *(.rel.tbss .rel.tbss.* .rel.gnu.linkonce.tb.*)
- *(.rel.ctors)
- *(.rel.dtors)
- *(.rel.got)
- *(.rel.bss .rel.bss.* .rel.gnu.linkonce.b.*)
-                [!provide]                        PROVIDE (__rel_iplt_start = .)
- *(.rel.iplt)
-                [!provide]                        PROVIDE (__rel_iplt_end = .)
+.igot.plt       0x20000004        0x0 load address 0x0800017c
+ .igot.plt      0x20000004        0x0 build/main.o
 
-.rela.dyn       0x00008000        0x0
- *(.rela.init)
- *(.rela.text .rela.text.* .rela.gnu.linkonce.t.*)
- *(.rela.fini)
- *(.rela.rodata .rela.rodata.* .rela.gnu.linkonce.r.*)
- *(.rela.data .rela.data.* .rela.gnu.linkonce.d.*)
- *(.rela.tdata .rela.tdata.* .rela.gnu.linkonce.td.*)
- *(.rela.tbss .rela.tbss.* .rela.gnu.linkonce.tb.*)
- *(.rela.ctors)
- *(.rela.dtors)
- *(.rela.got)
- *(.rela.bss .rela.bss.* .rela.gnu.linkonce.b.*)
-                [!provide]                        PROVIDE (__rela_iplt_start = .)
- *(.rela.iplt)
-                [!provide]                        PROVIDE (__rela_iplt_end = .)
-
-.rel.plt
- *(.rel.plt)
-
-.rela.plt
- *(.rela.plt)
-
-.init
- *(SORT_NONE(.init))
-
-.plt
- *(.plt)
-
-.iplt
- *(.iplt)
-
-.gnu.sgstubs
- *(.gnu.sgstubs*)
-
-.text           0x00008000        0x0
- *(.text.unlikely .text.*_unlikely .text.unlikely.*)
- *(.text.exit .text.exit.*)
- *(.text.startup .text.startup.*)
- *(.text.hot .text.hot.*)
- *(SORT_BY_NAME(.text.sorted.*))
- *(.text .stub .text.* .gnu.linkonce.t.*)
- *(.gnu.warning)
- *(.glue_7t)
- .glue_7t       0x00008000        0x0 linker stubs
- *(.glue_7)
- .glue_7        0x00008000        0x0 linker stubs
- *(.vfp11_veneer)
- .vfp11_veneer  0x00008000        0x0 linker stubs
- *(.v4_bx)
- .v4_bx         0x00008000        0x0 linker stubs
-
-.fini
- *(SORT_NONE(.fini))
-                [!provide]                        PROVIDE (__etext = .)
-                [!provide]                        PROVIDE (_etext = .)
-                [!provide]                        PROVIDE (etext = .)
-
-.rodata
- *(.rodata .rodata.* .gnu.linkonce.r.*)
-
-.rodata1
- *(.rodata1)
-
-.ARM.extab
- *(.ARM.extab* .gnu.linkonce.armextab.*)
-
-.ARM.exidx      0x00008000        0x0
-                [!provide]                        PROVIDE (__exidx_start = .)
- *(.ARM.exidx* .gnu.linkonce.armexidx.*)
-                [!provide]                        PROVIDE (__exidx_end = .)
-
-.eh_frame_hdr
- *(.eh_frame_hdr)
- *(.eh_frame_entry .eh_frame_entry.*)
-
-.eh_frame
- *(.eh_frame)
- *(.eh_frame.*)
-
-.sframe
- *(.sframe)
- *(.sframe.*)
-
-.gcc_except_table
- *(.gcc_except_table .gcc_except_table.*)
-
-.gnu_extab
- *(.gnu_extab*)
-
-.exception_ranges
- *(.exception_ranges*)
-                0x00008000                        . = (ALIGN (CONSTANT (MAXPAGESIZE)) + (. & (CONSTANT (MAXPAGESIZE) - 0x1)))
-
-.eh_frame
- *(.eh_frame)
- *(.eh_frame.*)
-
-.sframe
- *(.sframe)
- *(.sframe.*)
-
-.gnu_extab
- *(.gnu_extab)
-
-.gcc_except_table
- *(.gcc_except_table .gcc_except_table.*)
-
-.exception_ranges
- *(.exception_ranges*)
-
-.tdata          0x00008000        0x0
-                [!provide]                        PROVIDE (__tdata_start = .)
- *(.tdata .tdata.* .gnu.linkonce.td.*)
-
-.tbss
- *(.tbss .tbss.* .gnu.linkonce.tb.*)
- *(.tcommon)
-
-.preinit_array  0x00008000        0x0
-                [!provide]                        PROVIDE (__preinit_array_start = .)
- *(.preinit_array)
-                [!provide]                        PROVIDE (__preinit_array_end = .)
-
-.init_array     0x00008000        0x0
-                [!provide]                        PROVIDE (__init_array_start = .)
- *(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*))
- *(.init_array EXCLUDE_FILE(*crtend?.o *crtend.o *crtbegin?.o *crtbegin.o) .ctors)
-                [!provide]                        PROVIDE (__init_array_end = .)
-
-.fini_array     0x00008000        0x0
-                [!provide]                        PROVIDE (__fini_array_start = .)
- *(SORT_BY_INIT_PRIORITY(.fini_array.*) SORT_BY_INIT_PRIORITY(.dtors.*))
- *(.fini_array EXCLUDE_FILE(*crtend?.o *crtend.o *crtbegin?.o *crtbegin.o) .dtors)
-                [!provide]                        PROVIDE (__fini_array_end = .)
-
-.ctors
- *crtbegin.o(.ctors)
- *crtbegin?.o(.ctors)
- *(EXCLUDE_FILE(*crtend?.o *crtend.o) .ctors)
- *(SORT_BY_NAME(.ctors.*))
- *(.ctors)
-
-.dtors
- *crtbegin.o(.dtors)
- *crtbegin?.o(.dtors)
- *(EXCLUDE_FILE(*crtend?.o *crtend.o) .dtors)
- *(SORT_BY_NAME(.dtors.*))
- *(.dtors)
-
-.jcr
- *(.jcr)
-
-.data.rel.ro
- *(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*)
- *(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*)
-
-.dynamic
- *(.dynamic)
-
-.got
- *(.got.plt)
- *(.igot.plt)
- *(.got)
- *(.igot)
-
-.data           0x00008000        0x0
-                0x00008000                        __data_start = .
- *(.data .data.* .gnu.linkonce.d.*)
-
-.data1
- *(.data1)
-                0x00008000                        _edata = .
-                [!provide]                        PROVIDE (edata = .)
-
-.persistent     0x00008000        0x0
-                [!provide]                        PROVIDE (__persistent_start = .)
- *(.persistent .persistent.* .gnu.linkonce.p.*)
-                0x00008000                        . = ALIGN (0x4)
-                [!provide]                        PROVIDE (__persistent_end = .)
-                0x00008000                        . = ALIGN (ALIGNOF (NEXT_SECTION))
-                0x00008000                        __bss_start = .
-                0x00008000                        __bss_start__ = .
-
-.bss            0x00008000        0x0
- *(.dynbss)
- *(.bss .bss.* .gnu.linkonce.b.*)
+.bss            0x20000004        0x0 load address 0x0800017c
+                0x20000004                        . = ALIGN (0x4)
+                0x20000004                        _sbss = .
+ *(.bss)
+ *(.bss*)
  *(COMMON)
-                0x00008000                        . = ALIGN ((. != 0x0)?0x4:0x1)
-                0x00008000                        _bss_end__ = .
-                0x00008000                        __bss_end__ = .
+                0x20000004                        . = ALIGN (0x4)
+                0x20000004                        _ebss = .
+OUTPUT(build/motor-node.elf elf32-littlearm)
+LOAD linker stubs
 
-.noinit         0x00008000        0x0
-                [!provide]                        PROVIDE (__noinit_start = .)
- *(.noinit .noinit.* .gnu.linkonce.n.*)
-                0x00008000                        . = ALIGN (0x4)
-                [!provide]                        PROVIDE (__noinit_end = .)
-                0x00008000                        . = ALIGN (0x4)
-                0x00008000                        . = SEGMENT_START ("ldata-segment", .)
-                0x00008000                        . = ALIGN (0x4)
-                0x00008000                        __end__ = .
-                0x00008000                        _end = .
-                [!provide]                        PROVIDE (end = .)
+.debug_info     0x00000000       0xb8
+ .debug_info    0x00000000       0xb8 build/main.o
 
-.stack          0x00080000        0x0
-                0x00080000                        _stack = .
- *(.stack)
+.debug_abbrev   0x00000000       0x6f
+ .debug_abbrev  0x00000000       0x6f build/main.o
 
-.stab
- *(.stab)
-
-.stabstr
- *(.stabstr)
-
-.stab.excl
- *(.stab.excl)
-
-.stab.exclstr
- *(.stab.exclstr)
-
-.stab.index
- *(.stab.index)
-
-.stab.indexstr
- *(.stab.indexstr)
-
-.comment
- *(.comment)
-
-.gnu.build.attributes
- *(.gnu.build.attributes .gnu.build.attributes.*)
-
-.debug
- *(.debug)
-
-.line
- *(.line)
-
-.debug_srcinfo
- *(.debug_srcinfo)
-
-.debug_sfnames
- *(.debug_sfnames)
-
-.debug_aranges
- *(.debug_aranges)
-
-.debug_pubnames
- *(.debug_pubnames)
-
-.debug_info
- *(.debug_info .gnu.linkonce.wi.*)
-
-.debug_abbrev
- *(.debug_abbrev)
-
-.debug_line
- *(.debug_line .debug_line.* .debug_line_end)
-
-.debug_frame
- *(.debug_frame)
-
-.debug_str
- *(.debug_str)
-
-.debug_loc
- *(.debug_loc)
-
-.debug_macinfo
- *(.debug_macinfo)
-
-.debug_weaknames
- *(.debug_weaknames)
-
-.debug_funcnames
- *(.debug_funcnames)
-
-.debug_typenames
- *(.debug_typenames)
-
-.debug_varnames
- *(.debug_varnames)
-
-.debug_pubtypes
- *(.debug_pubtypes)
-
-.debug_ranges
- *(.debug_ranges)
-
-.debug_addr
- *(.debug_addr)
-
-.debug_line_str
- *(.debug_line_str)
-
-.debug_loclists
- *(.debug_loclists)
-
-.debug_macro
- *(.debug_macro)
-
-.debug_names
- *(.debug_names)
+.debug_aranges  0x00000000       0x20
+ .debug_aranges
+                0x00000000       0x20 build/main.o
 
 .debug_rnglists
- *(.debug_rnglists)
+                0x00000000       0x13
+ .debug_rnglists
+                0x00000000       0x13 build/main.o
 
-.debug_str_offsets
- *(.debug_str_offsets)
+.debug_macro    0x00000000      0xe28
+ .debug_macro   0x00000000       0x1a build/main.o
+ .debug_macro   0x0000001a      0xac0 build/main.o
+ .debug_macro   0x00000ada      0x34e build/main.o
 
-.debug_sup
- *(.debug_sup)
+.debug_line     0x00000000       0x80
+ .debug_line    0x00000000       0x80 build/main.o
+
+.debug_str      0x00000000     0x375a
+ .debug_str     0x00000000     0x375a build/main.o
+                               0x38bd (size before relaxing)
+
+.comment        0x00000000       0x26
+ .comment       0x00000000       0x26 build/main.o
+                                 0x27 (size before relaxing)
+ .comment       0x00000026       0x27 /tmp/ccQxOn6R.o
 
 .ARM.attributes
                 0x00000000       0x2d
- *(.ARM.attributes)
  .ARM.attributes
                 0x00000000       0x2d build/main.o
- *(.gnu.attributes)
+ .ARM.attributes
+                0x0000002d       0x2d /tmp/ccQxOn6R.o
 
-.note.gnu.arm.ident
- *(.note.gnu.arm.ident)
-
-/DISCARD/
- *(.note.GNU-stack)
- *(.gnu_debuglink)
- *(.gnu.lto_*)
-OUTPUT(build/motor-node.elf elf32-littlearm)
-LOAD linker stubs
+.debug_frame    0x00000000       0x2c
+ .debug_frame   0x00000000       0x2c build/main.o

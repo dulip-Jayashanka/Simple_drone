@@ -1,34 +1,38 @@
 PROJECT := motor-node
 
-CC      := arm-none-eabi-gcc   ## Cross compiler for ARM Cortex-M microcontrollers
-OBJCOPY := arm-none-eabi-objcopy ## Tool to convert ELF files to binary format
-SIZE    := arm-none-eabi-size ##tool to display the size of the ELF file
+CC      := arm-none-eabi-gcc
+OBJCOPY := arm-none-eabi-objcopy
+SIZE    := arm-none-eabi-size
 
-BUILD_DIR := build ## Directory to store build artifacts
-SRC_DIR   := src ## Directory containing source files
-INC_DIR   := include ## Directory containing header files
+BUILD_DIR := build
+SRC_DIR   := src
+INC_DIR   := include
 
-SOURCES := $(SRC_DIR)/main.c
+
+SOURCES := $(SRC_DIR)/main.c\
+		   startup/startup_stm32f103c8.c
+
 OBJECTS := $(SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
 CPU_FLAGS := -mcpu=cortex-m3 -mthumb
-
+LINKER_SCRIPT := linker/stm32f103c8.ld
 CFLAGS := $(CPU_FLAGS) \
-          -std=c11 \ ## Use C11 standard
-          -Wall \    ## Enable all warnings
-          -Wextra \  ## Enable extra warnings
-          -Werror \  ## Treat warnings as errors
-          -O0 \      ### No optimization for easier debugging
-          -g3 \      ### Generate debug informations in elf file 
-          -ffreestanding \  ### Indicate that the program is freestanding (no standard library)
-          -ffunction-sections \  ### Place each function in its own section exmple  .text.main .text.led_init   
-          -fdata-sections \  ### Place each data item in its own section example .data.counter .data.led_state
-          -I$(INC_DIR)   ## Include directory for header files
+          -std=c11 \
+          -Wall \
+          -Wextra \
+          -Werror \
+          -O0 \
+          -g3 \
+          -ffreestanding \
+          -ffunction-sections \
+          -fdata-sections \
+          -I$(INC_DIR)
 
 LDFLAGS := $(CPU_FLAGS) \
-           -nostartfiles \ ### Do not use standard system startup files
-           -Wl,--gc-sections \  ### Remove unused sections from the final binary
-           -Wl,-Map=$(BUILD_DIR)/$(PROJECT).map  ### Generate a map file for the final binary
+           -nostartfiles \
+           -T$(LINKER_SCRIPT) \
+           -Wl,--gc-sections \
+           -Wl,-Map=$(BUILD_DIR)/$(PROJECT).map
 
 ELF := $(BUILD_DIR)/$(PROJECT).elf
 BIN := $(BUILD_DIR)/$(PROJECT).bin
@@ -43,8 +47,8 @@ $(BUILD_DIR):
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(ELF): $(OBJECTS)
-	$(CC) $(LDFLAGS) $^ -o $@
+$(ELF): $(OBJECTS) $(LINKER_SCRIPT)
+	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
 
 $(BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@
