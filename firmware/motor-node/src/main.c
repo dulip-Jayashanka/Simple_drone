@@ -1,4 +1,8 @@
 #include "system_clock.h"
+#include "fault_handlers.h"
+#include "fault_test.h"
+#include "motor_outputs.h"
+
 
 #include <stdint.h>
 
@@ -13,8 +17,13 @@ volatile uint32_t g_pclk1_hz;
 volatile uint32_t g_pclk2_hz;
 volatile uint32_t g_adcclk_hz;
 
+volatile uint32_t g_main_loop_reached;
+
 int main(void)
-{
+{   
+
+    fault_record_clear();
+
     g_clock_status = system_clock_init();
 
     /*
@@ -42,7 +51,12 @@ int main(void)
     /*
      * Later phases will initialize GPIO, UART, timers, I2C and CAN here.
      */
-    while (1)
+
+    fault_test_run();
+
+    g_main_loop_reached = 1UL;
+
+    for (;;)
     {
         __asm volatile ("nop");
     }

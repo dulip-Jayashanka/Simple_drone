@@ -1,73 +1,142 @@
 PROJECT := motor-node
+FAULT_TEST_MODE ?= 0
+
+ifeq ($(FAULT_TEST_MODE),0)
+BUILD_DIR := build
+else
+BUILD_DIR := build/fault-test-$(FAULT_TEST_MODE)
+endif
 
 CC      := arm-none-eabi-gcc
 OBJCOPY := arm-none-eabi-objcopy
+OBJDUMP := arm-none-eabi-objdump
 SIZE    := arm-none-eabi-size
+NM      := arm-none-eabi-nm
 
-BUILD_DIR   := build
-SRC_DIR     := src
-INC_DIR     := include
+SRC_DIR      := src
+INC_DIR      := include
+TEST_DIR     := tests
+STARTUP_DIR  := startup
 PLATFORM_DIR := ../../platform/stm32f103c8
 
-APP_SOURCES := $(SRC_DIR)/main.c
-APP_OBJECTS := $(APP_SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+LINKER_SCRIPT := linker/stm32f103c8.ld
 
-STARTUP_SOURCE := startup/startup_stm32f103c8.c
-CLOCK_SOURCE   := $(PLATFORM_DIR)/src/system_clock.c
-CLOCK_HEADER   := $(PLATFORM_DIR)/include/system_clock.h
+OBJECTS := \
+	$(BUILD_DIR)/main.o \
+	$(BUILD_DIR)/motor_outputs.o \
+	$(BUILD_DIR)/fault_test.o \
+	$(BUILD_DIR)/startup_stm32f103c8.o \
+	$(BUILD_DIR)/system_clock.o \
+	$(BUILD_DIR)/fault_handlers.o
 
-OBJECTS := $(APP_OBJECTS) \
-           $(BUILD_DIR)/startup_stm32f103c8.o \
-           $(BUILD_DIR)/system_clock.o
+DEPS := $(OBJECTS:.o=.d)
 
 CPU_FLAGS := -mcpu=cortex-m3 -mthumb
-LINKER_SCRIPT := linker/stm32f103c8.ld
-CFLAGS := $(CPU_FLAGS) \
-          -std=c11 \
-          -Wall \
-          -Wextra \
-          -Werror \
-          -O0 \
-          -g3 \
-          -ffreestanding \
-          -ffunction-sections \
-          -fdata-sections \
-          -I$(INC_DIR) \
-          -I$(PLATFORM_DIR)/include
 
-LDFLAGS := $(CPU_FLAGS) \
-           -nostartfiles \
-           -T$(LINKER_SCRIPT) \
-           -Wl,--gc-sections \
-           -Wl,-Map=$(BUILD_DIR)/$(PROJECT).map
+CFLAGS := \
+	$(CPU_FLAGS) \
+	-std=c11 \
+	-Wall \
+	-Wextra \
+	-Werror \
+	-O0 \
+	-g3 \
+	-ffreestanding \
+	-ffunction-sections \
+	-fdata-sections \
+	-fno-common \
+	-fno-unwind-tables \
+	-fno-asynchronous-unwind-tables \
+	-DFAULT_TEST_MODE=$(FAULT_TEST_MODE) \
+	-I$(INC_DIR) \
+	-I$(TEST_DIR) \
+	-I$(PLATFORM_DIR)/include \
+	-MMD \
+	-MP
 
-ELF := $(BUILD_DIR)/$(PROJECT).elf
-BIN := $(BUILD_DIR)/$(PROJECT).bin
+LDFLAGS := \
+	$(CPU_FLAGS) \
+	-nostartfiles \
+	-nostdlib \
+	-T$(LINKER_SCRIPT) \
+	-Wl,--gc-sections \
+	-Wl,-Map=$(BUILD_DIR)/$(PROJECT).map \
+	-Wl,--print-memory-usage
 
-.PHONY: all clean size
+ELF     := $(BUILD_DIR)/$(PROJECT).elf
+BIN     := $(BUILD_DIR)/$(PROJECT).bin
+HEX     := $(BUILD_DIR)/$(PROJECT).hex
+LIST    := $(BUILD_DIR)/$(PROJECT).list
+SYMBOLS := $(BUILD_DIR)/$(PROJECT).symbols
 
-all: $(ELF) $(BIN) size
+.PHONY: all clean size inspect \
+	test-normal test-default test-nmi test-hardfault
+
+all: $(ELF) $(BIN) $(HEX) $(LIST) $(SYMBOLS) size
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
-$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
+$(BUILD_DIR)/main.o: $(SRC_DIR)/main.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/startup_stm32f103c8.o: $(STARTUP_SOURCE) | $(BUILD_DIR)
+$(BUILD_DIR)/motor_outputs.o: $(SRC_DIR)/motor_outputs.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/system_clock.o: $(CLOCK_SOURCE) $(CLOCK_HEADER) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $(CLOCK_SOURCE) -o $@
+$(BUILD_DIR)/fault_test.o: $(TEST_DIR)/fault_test.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/startup_stm32f103c8.o: \
+	$(STARTUP_DIR)/startup_stm32f103c8.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/system_clock.o: \
+	$(PLATFORM_DIR)/src/system_clock.c \
+	$(PLATFORM_DIR)/include/system_clock.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/fault_handlers.o: \
+	$(PLATFORM_DIR)/src/fault_handlers.c \
+	$(PLATFORM_DIR)/include/fault_handlers.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(ELF): $(OBJECTS) $(LINKER_SCRIPT)
-	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
+	$(CC) $(OBJECTS) $(LDFLAGS) -lgcc -o $@
 
 $(BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@
 
+$(HEX): $(ELF)
+	$(OBJCOPY) -O ihex $< $@
+
+$(LIST): $(ELF)
+	$(OBJDUMP) -h -S $< > $@
+
+$(SYMBOLS): $(ELF)
+	$(NM) -n $< > $@
+
 size: $(ELF)
 	$(SIZE) $<
 
+inspect: all
+	$(OBJDUMP) -h $(ELF)
+	$(OBJDUMP) -s -j .isr_vector $(ELF)
+	$(NM) -n $(ELF) | grep -E \
+		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|g_fault_record|g_motor_safe_state_requested'
+
+test-normal:
+	$(MAKE) FAULT_TEST_MODE=0 all
+
+test-default:
+	$(MAKE) FAULT_TEST_MODE=1 all
+
+test-nmi:
+	$(MAKE) FAULT_TEST_MODE=2 all
+
+test-hardfault:
+	$(MAKE) FAULT_TEST_MODE=3 all
+
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf build
+
+-include $(DEPS)
