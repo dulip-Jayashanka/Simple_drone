@@ -11,12 +11,16 @@
  * 1 = emergency shutdown requested
  */
 extern volatile uint32_t g_motor_safe_state_requested;
-
+extern volatile uint32_t g_motor_outputs_safe;
 /*
  * Request immediate motor shutdown.
  *
  * Fault handlers call this function before recording fault information.
  */
+
+
+bool motor_outputs_are_safe(void);
+
 void motor_outputs_force_safe(void);
 
 /*
@@ -32,6 +36,6 @@ bool motor_outputs_safe_state_was_requested(void);
  *
  * The PWM phase will replace it with a strong implementation.
  */
-void motor_outputs_hardware_force_safe(void);
+
 
 #endif /* MOTOR_OUTPUTS_H */

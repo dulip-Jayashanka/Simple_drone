@@ -1,3 +1,20 @@
+# Motor-node Makefile
+#
+# Compatible with the attached repository layout:
+#
+#   firmware/motor-node/
+#   ├── Makefile
+#   ├── include/
+#   ├── linker/stm32f103c8.ld
+#   ├── src/
+#   ├── startup/
+#   └── tests/
+#
+# Run this Makefile from firmware/motor-node with:
+#
+#   make
+#
+
 PROJECT := motor-node
 FAULT_TEST_MODE ?= 0
 
@@ -13,12 +30,14 @@ OBJDUMP := arm-none-eabi-objdump
 SIZE    := arm-none-eabi-size
 NM      := arm-none-eabi-nm
 
+# These paths are relative to firmware/motor-node.
 SRC_DIR      := src
 INC_DIR      := include
 TEST_DIR     := tests
 STARTUP_DIR  := startup
 PLATFORM_DIR := ../../platform/stm32f103c8
 
+# Keep the exact lowercase linker-script name used by the attached project.
 LINKER_SCRIPT := linker/stm32f103c8.ld
 
 OBJECTS := \
@@ -122,7 +141,7 @@ inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(OBJDUMP) -s -j .isr_vector $(ELF)
 	$(NM) -n $(ELF) | grep -E \
-		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|g_fault_record|g_motor_safe_state_requested'
+		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|g_fault_record|g_motor_safe_state_requested|g_motor_outputs_safe|motor_outputs_are_safe'
 
 test-normal:
 	$(MAKE) FAULT_TEST_MODE=0 all
