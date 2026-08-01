@@ -30,6 +30,8 @@ typedef struct
 #define FLASH  ((flash_registers_t *)FLASH_INTERFACE_BASE_ADDRESS)
 
 /* RCC_CR bits. */
+#define RCC_CR_HSION                  (1UL << 0)
+#define RCC_CR_HSIRDY                 (1UL << 1)
 #define RCC_CR_HSEON                  (1UL << 16)
 #define RCC_CR_HSERDY                 (1UL << 17)
 #define RCC_CR_PLLON                  (1UL << 24)
@@ -37,18 +39,22 @@ typedef struct
 
 /* RCC_CFGR system-clock selection fields. */
 #define RCC_CFGR_SW_MASK              (3UL << 0)
+#define RCC_CFGR_SW_HSI               (0UL << 0)
 #define RCC_CFGR_SW_PLL               (2UL << 0)
 #define RCC_CFGR_SWS_MASK             (3UL << 2)
+#define RCC_CFGR_SWS_HSI              (0UL << 2)
 #define RCC_CFGR_SWS_PLL              (2UL << 2)
 
 /* RCC_CFGR bus-prescaler fields. */
 #define RCC_CFGR_HPRE_MASK            (15UL << 4)
 #define RCC_CFGR_HPRE_DIV1            (0UL << 4)
 #define RCC_CFGR_PPRE1_MASK           (7UL << 8)
+#define RCC_CFGR_PPRE1_DIV1           (0UL << 8)
 #define RCC_CFGR_PPRE1_DIV2           (4UL << 8)
 #define RCC_CFGR_PPRE2_MASK           (7UL << 11)
 #define RCC_CFGR_PPRE2_DIV1           (0UL << 11)
 #define RCC_CFGR_ADCPRE_MASK          (3UL << 14)
+#define RCC_CFGR_ADCPRE_DIV2          (0UL << 14)
 #define RCC_CFGR_ADCPRE_DIV6          (2UL << 14)
 
 /* RCC_CFGR PLL fields. */
@@ -121,6 +127,91 @@ static void record_reset_hsi_clock_tree(void)
     adc_clock_hz = RESET_HSI_CLOCK_HZ / 2UL;
 }
 
+/*
+ * Restore one known, internally generated clock tree after any failed
+ * attempt to start or select the external-crystal/PLL clock.
+ *
+ * The order is important:
+ *
+ *   1. Make HSI ready.
+ *   2. Select HSI and confirm SWS reports HSI.
+ *   3. Only then disable PLL/HSE.
+ *   4. Restore the reset bus and ADC prescalers.
+ *   5. Only then reduce the Flash latency.
+ *
+ * The original failure status is preserved when fallback succeeds, so the
+ * caller still knows whether HSE, PLL, or the first SYSCLK switch failed.
+ */
+static system_clock_status_t fallback_to_hsi(
+    system_clock_status_t original_failure)
+{
+    uint32_t cfgr;
+
+    RCC->CR |= RCC_CR_HSION;
+
+    if (!wait_for_register_value(
+            &RCC->CR,
+            RCC_CR_HSIRDY,
+            RCC_CR_HSIRDY))
+    {
+        return SYSTEM_CLOCK_FALLBACK_TIMEOUT;
+    }
+
+    RCC->CFGR =
+        (RCC->CFGR & ~RCC_CFGR_SW_MASK) |
+        RCC_CFGR_SW_HSI;
+
+    if (!wait_for_register_value(
+            &RCC->CFGR,
+            RCC_CFGR_SWS_MASK,
+            RCC_CFGR_SWS_HSI))
+    {
+        return SYSTEM_CLOCK_FALLBACK_TIMEOUT;
+    }
+
+    /* PLL is no longer SYSCLK, so it is now safe to stop it. */
+    RCC->CR &= ~RCC_CR_PLLON;
+
+    if (!wait_for_register_value(
+            &RCC->CR,
+            RCC_CR_PLLRDY,
+            0UL))
+    {
+        return SYSTEM_CLOCK_FALLBACK_TIMEOUT;
+    }
+
+    /* HSE is no longer used directly or by the PLL. */
+    RCC->CR &= ~RCC_CR_HSEON;
+
+    /*
+     * Restore the actual fallback tree:
+     *
+     *   HCLK   = SYSCLK / 1 = 8 MHz
+     *   PCLK1  = HCLK   / 1 = 8 MHz
+     *   PCLK2  = HCLK   / 1 = 8 MHz
+     *   ADCCLK = PCLK2  / 2 = 4 MHz
+     */
+    cfgr = RCC->CFGR;
+    cfgr &= ~(
+        RCC_CFGR_HPRE_MASK |
+        RCC_CFGR_PPRE1_MASK |
+        RCC_CFGR_PPRE2_MASK |
+        RCC_CFGR_ADCPRE_MASK);
+    cfgr |=
+        RCC_CFGR_HPRE_DIV1 |
+        RCC_CFGR_PPRE1_DIV1 |
+        RCC_CFGR_PPRE2_DIV1 |
+        RCC_CFGR_ADCPRE_DIV2;
+    RCC->CFGR = cfgr;
+
+    /* At 8 MHz, zero Flash wait states are sufficient. */
+    FLASH->ACR &= ~FLASH_ACR_LATENCY_MASK;
+
+    record_reset_hsi_clock_tree();
+
+    return original_failure;
+}
+
 system_clock_status_t system_clock_init(void)
 {
     uint32_t cfgr;
@@ -142,8 +233,7 @@ system_clock_status_t system_clock_init(void)
             RCC_CR_HSERDY,
             RCC_CR_HSERDY))
     {
-        RCC->CR &= ~RCC_CR_HSEON;
-        return SYSTEM_CLOCK_HSE_TIMEOUT;
+        return fallback_to_hsi(SYSTEM_CLOCK_HSE_TIMEOUT);
     }
 
     /*
@@ -201,8 +291,7 @@ system_clock_status_t system_clock_init(void)
             RCC_CR_PLLRDY,
             RCC_CR_PLLRDY))
     {
-        RCC->CR &= ~RCC_CR_PLLON;
-        return SYSTEM_CLOCK_PLL_TIMEOUT;
+        return fallback_to_hsi(SYSTEM_CLOCK_PLL_TIMEOUT);
     }
 
     /*
@@ -221,13 +310,7 @@ system_clock_status_t system_clock_init(void)
             RCC_CFGR_SWS_MASK,
             RCC_CFGR_SWS_PLL))
     {
-        /*
-         * Request HSI again. Do not disable the PLL here: if the clock
-         * transition happened exactly at the timeout boundary, keeping the
-         * PLL running is safer than removing a possible active clock source.
-         */
-        RCC->CFGR &= ~RCC_CFGR_SW_MASK;
-        return SYSTEM_CLOCK_SWITCH_TIMEOUT;
+        return fallback_to_hsi(SYSTEM_CLOCK_SWITCH_TIMEOUT);
     }
 
     /*

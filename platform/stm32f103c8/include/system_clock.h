@@ -6,15 +6,17 @@
 /*
  * Result returned by system_clock_init().
  *
- * If initialization fails, the STM32 remains on its reset-default
- * 8 MHz internal HSI system clock.
+ * If HSE/PLL initialization fails, the function restores the 8 MHz HSI
+ * fallback tree. SYSTEM_CLOCK_FALLBACK_TIMEOUT means that this restoration
+ * could not be fully confirmed by the hardware status bits.
  */
 typedef enum
 {
     SYSTEM_CLOCK_OK = 0,
     SYSTEM_CLOCK_HSE_TIMEOUT,
     SYSTEM_CLOCK_PLL_TIMEOUT,
-    SYSTEM_CLOCK_SWITCH_TIMEOUT
+    SYSTEM_CLOCK_SWITCH_TIMEOUT,
+    SYSTEM_CLOCK_FALLBACK_TIMEOUT
 } system_clock_status_t;
 
 /*
