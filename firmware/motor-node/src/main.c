@@ -2,7 +2,8 @@
 #include "fault_test.h"
 #include "motor_outputs.h"
 #include "system_clock.h"
-
+#include "status_led.h"
+#include "system_time.h"
 #include <stdint.h>
 
 /*
@@ -19,6 +20,8 @@ volatile uint32_t g_adcclk_hz;
  * Existing debugger-visible main-loop indicator.
  */
 volatile uint32_t g_main_loop_reached;
+volatile system_time_status_t g_system_time_status;
+#define STATUS_LED_TOGGLE_INTERVAL_MS  500UL
 
 int main(void)
 {
@@ -32,6 +35,9 @@ int main(void)
      * It now configures PA6, PA7, PB0 and PB1 as physical
      * GPIO outputs and holds them LOW.
      */
+    uint32_t previous_heartbeat_ms;
+    uint32_t current_time_ms;
+
     motor_outputs_force_safe();
 
     /*
@@ -70,7 +76,7 @@ int main(void)
     /* ============================================================
      * PHASE 2.1.6 — NEW CODE END
      * ============================================================ */
-
+    status_led_init();
 
     /*
      * Existing Phase 2.1.4 clock initialization.
@@ -148,6 +154,9 @@ int main(void)
             __asm volatile ("nop");
         }
     }
+    
+
+
 
     /* ============================================================
      * PHASE 2.1.6 — NEW CODE END
@@ -157,15 +166,98 @@ int main(void)
     /*
      * Existing debugger-visible indication that startup succeeded.
      */
+
+      /* ============================================================
+     * PHASE 2.1.9: NEW CODE START
+     *
+     * The system clock is now confirmed as valid.
+     *
+     * Pass the actual HCLK frequency to system_time_init() so it
+     * can calculate the correct 1 ms SysTick reload value.
+     * ============================================================ */
+
+    g_system_time_status =
+        system_time_init(system_clock_get_hclk_hz());
+
+    /*
+     * If SysTick cannot create the required 1 ms time base, remain
+     * in the safe state.
+     *
+     * The motor outputs remain LOW and the LED remains OFF.
+     */
+    if (g_system_time_status != SYSTEM_TIME_OK)
+    {
+        motor_outputs_force_safe();
+        status_led_off();
+
+        for (;;)
+        {
+            __asm volatile ("nop");
+        }
+    }
+
+    /* ============================================================
+     * PHASE 2.1.9: NEW CODE END
+     * ============================================================ */
+    
     g_main_loop_reached = 1UL;
+
+    status_led_on();
+
+    previous_heartbeat_ms = millis();
+
 
     for (;;)
     {
-        /*
-         * Normal idle main loop.
+         /* ========================================================
+         * PHASE 2.1.9: NEW CODE START
          *
-         * PWM, ESC control, CAN communication and control commands
-         * are not implemented during Phase 2.1.6.
+         * Non-blocking LED heartbeat.
+         * ======================================================== */
+
+        /*
+         * Read millis() once during this main-loop iteration.
+         */
+        current_time_ms = millis();
+
+        /*
+         * Unsigned subtraction makes this check work correctly even
+         * when the 32-bit millisecond counter wraps from:
+         *
+         *     0xFFFFFFFF -> 0x00000000
+         */
+        if ((uint32_t)
+            (current_time_ms - previous_heartbeat_ms) >=
+            STATUS_LED_TOGGLE_INTERVAL_MS)
+        {
+            /*
+             * Begin measuring the next interval from the time at
+             * which this toggle was processed.
+             */
+            previous_heartbeat_ms = current_time_ms;
+
+            /*
+             * The LED GPIO operation remains outside the interrupt
+             * handler. SysTick_Handler() only increments the counter.
+             */
+            status_led_toggle();
+        }
+
+        /* ========================================================
+         * PHASE 2.1.9: NEW CODE END
+         * ======================================================== */
+
+        /*
+         * The main loop remains free to perform later operations.
+         *
+         * Future examples:
+         *
+         *     can_process_received_messages();
+         *     motor_command_timeout_check();
+         *     motor_safety_check();
+         *     telemetry_process();
+         *
+         * No blocking delay is used here.
          */
         __asm volatile ("nop");
     }

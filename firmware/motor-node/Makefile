@@ -46,7 +46,9 @@ OBJECTS := \
 	$(BUILD_DIR)/fault_test.o \
 	$(BUILD_DIR)/startup_stm32f103c8.o \
 	$(BUILD_DIR)/system_clock.o \
-	$(BUILD_DIR)/fault_handlers.o
+	$(BUILD_DIR)/fault_handlers.o \
+	$(BUILD_DIR)/status_led.o \
+	$(BUILD_DIR)/system_time.o
 
 DEPS := $(OBJECTS:.o=.d)
 
@@ -102,6 +104,11 @@ $(BUILD_DIR)/main.o: $(SRC_DIR)/main.c | $(BUILD_DIR)
 $(BUILD_DIR)/motor_outputs.o: $(SRC_DIR)/motor_outputs.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/status_led.o: \
+	$(SRC_DIR)/status_led.c \
+	$(INC_DIR)/status_led.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/fault_test.o: $(TEST_DIR)/fault_test.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -112,6 +119,11 @@ $(BUILD_DIR)/startup_stm32f103c8.o: \
 $(BUILD_DIR)/system_clock.o: \
 	$(PLATFORM_DIR)/src/system_clock.c \
 	$(PLATFORM_DIR)/include/system_clock.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/system_time.o: \
+	$(PLATFORM_DIR)/src/system_time.c \
+	$(PLATFORM_DIR)/include/system_time.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/fault_handlers.o: \
