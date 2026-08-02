@@ -29,6 +29,7 @@ OBJCOPY := arm-none-eabi-objcopy
 OBJDUMP := arm-none-eabi-objdump
 SIZE    := arm-none-eabi-size
 NM      := arm-none-eabi-nm
+HOST_CC ?= cc
 
 # These paths are relative to firmware/motor-node.
 SRC_DIR      := src
@@ -43,13 +44,14 @@ LINKER_SCRIPT := linker/stm32f103c8.ld
 OBJECTS := \
 	$(BUILD_DIR)/main.o \
 	$(BUILD_DIR)/motor_outputs.o \
+	$(BUILD_DIR)/motor_node_state.o \
 	$(BUILD_DIR)/fault_test.o \
 	$(BUILD_DIR)/startup_stm32f103c8.o \
 	$(BUILD_DIR)/system_clock.o \
 	$(BUILD_DIR)/fault_handlers.o \
 	$(BUILD_DIR)/status_led.o \
 	$(BUILD_DIR)/system_time.o \
-	$(BUILD_DIR)/uart_diag.o
+	$(BUILD_DIR)/uart_diag.o 	
 
 DEPS := $(OBJECTS:.o=.d)
 
@@ -92,7 +94,8 @@ LIST    := $(BUILD_DIR)/$(PROJECT).list
 SYMBOLS := $(BUILD_DIR)/$(PROJECT).symbols
 
 .PHONY: all clean size inspect \
-	test-normal test-default test-nmi test-hardfault
+	test-normal test-default test-nmi test-hardfault \
+	test-state-host
 
 all: $(ELF) $(BIN) $(HEX) $(LIST) $(SYMBOLS) size
 
@@ -103,6 +106,12 @@ $(BUILD_DIR)/main.o: $(SRC_DIR)/main.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/motor_outputs.o: $(SRC_DIR)/motor_outputs.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/motor_node_state.o: \
+	$(SRC_DIR)/motor_node_state.c \
+	$(INC_DIR)/motor_node_state.h \
+	$(INC_DIR)/motor_outputs.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/status_led.o: \
@@ -159,7 +168,7 @@ inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(OBJDUMP) -s -j .isr_vector $(ELF)
 		$(NM) -n $(ELF) | grep -E \
-		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|SysTick_Handler|g_fault_record|g_motor_safe_state_requested|g_motor_outputs_safe|motor_outputs_are_safe|g_system_time_status|g_milliseconds|g_uart_diag_status|g_uart_diag_output_ok|uart_diag_init|uart_diag_write_char|uart_diag_write_string|uart_diag_write_line|uart_diag_write_uint32|uart_diag_write_hex32'
+		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|SysTick_Handler|g_fault_record|g_motor_safe_state_requested|g_motor_outputs_safe|motor_outputs_are_safe|g_system_time_status|g_milliseconds|g_uart_diag_status|g_uart_diag_output_ok|uart_diag_init|uart_diag_write_char|uart_diag_write_string|uart_diag_write_line|uart_diag_write_uint32|uart_diag_write_hex32|g_motor_node_state|g_motor_node_state_initialized|g_disarmed_enforcement_count|g_disarmed_safety_failure_count|g_unexpected_state_count|motor_node_state_init|motor_node_state_process|motor_node_is_disarmed'
 
 test-normal:
 	$(MAKE) FAULT_TEST_MODE=0 all
@@ -172,6 +181,15 @@ test-nmi:
 
 test-hardfault:
 	$(MAKE) FAULT_TEST_MODE=3 all
+
+test-state-host:
+	mkdir -p build/host
+	$(HOST_CC) -std=c11 -Wall -Wextra -Werror -O0 -g3 \
+		-I$(INC_DIR) \
+		$(SRC_DIR)/motor_node_state.c \
+		$(TEST_DIR)/motor_node_state_test.c \
+		-o build/host/motor_node_state_test
+	./build/host/motor_node_state_test
 
 clean:
 	rm -rf build

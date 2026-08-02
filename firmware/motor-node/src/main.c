@@ -5,6 +5,8 @@
 #include "status_led.h"
 #include "system_time.h"
 #include "uart_diag.h"
+#include "motor_node_state.h"
+
 #include <stdint.h>
 
 
@@ -327,6 +329,39 @@ int main(void)
     }
 
     /* ============================================================
+    * PHASE 2.1.11 — NEW CODE START
+    * ============================================================ */
+
+    if (!motor_node_state_init())
+    {
+        motor_outputs_force_safe();
+        status_led_off();
+
+        if (g_uart_diag_status == UART_DIAG_OK)
+        {
+            uart_diag_record_result(
+                uart_diag_write_line(
+                    "[ERROR] Failed to enter DISARMED"));
+        }
+
+        for (;;)
+        {
+            __asm volatile ("nop");
+        }
+    }
+
+    if (g_uart_diag_status == UART_DIAG_OK)
+    {
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[STATE] Entered DISARMED"));
+    }
+
+    /* ============================================================
+    * PHASE 2.1.11 — NEW CODE END
+    * ============================================================ */
+
+    /* ============================================================
      * PHASE 2.1.9: NEW CODE END
      * ============================================================ */
     
@@ -355,6 +390,29 @@ int main(void)
         /*
          * Read millis() once during this main-loop iteration.
          */
+
+         /* Place the Phase 2.1.11 enforcement block HERE,
+       before heartbeat and other application processing. */
+
+        if (!motor_node_state_process())
+        {
+            motor_outputs_force_safe();
+            status_led_off();
+
+            if (g_uart_diag_status == UART_DIAG_OK)
+            {
+                uart_diag_record_result(
+                    uart_diag_write_line(
+                        "[ERROR] DISARMED safety enforcement failed"));
+            }
+
+            for (;;)
+            {
+                __asm volatile ("nop");
+            }
+        }
+
+         
         current_time_ms = millis();
 
         /*
