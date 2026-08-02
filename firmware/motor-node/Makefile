@@ -48,7 +48,8 @@ OBJECTS := \
 	$(BUILD_DIR)/system_clock.o \
 	$(BUILD_DIR)/fault_handlers.o \
 	$(BUILD_DIR)/status_led.o \
-	$(BUILD_DIR)/system_time.o
+	$(BUILD_DIR)/system_time.o \
+	$(BUILD_DIR)/uart_diag.o
 
 DEPS := $(OBJECTS:.o=.d)
 
@@ -126,6 +127,11 @@ $(BUILD_DIR)/system_time.o: \
 	$(PLATFORM_DIR)/include/system_time.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/uart_diag.o: \
+	$(PLATFORM_DIR)/src/uart_diag.c \
+	$(PLATFORM_DIR)/include/uart_diag.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/fault_handlers.o: \
 	$(PLATFORM_DIR)/src/fault_handlers.c \
 	$(PLATFORM_DIR)/include/fault_handlers.h | $(BUILD_DIR)
@@ -152,8 +158,8 @@ size: $(ELF)
 inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(OBJDUMP) -s -j .isr_vector $(ELF)
-	$(NM) -n $(ELF) | grep -E \
-		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|g_fault_record|g_motor_safe_state_requested|g_motor_outputs_safe|motor_outputs_are_safe'
+		$(NM) -n $(ELF) | grep -E \
+		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|SysTick_Handler|g_fault_record|g_motor_safe_state_requested|g_motor_outputs_safe|motor_outputs_are_safe|g_system_time_status|g_milliseconds|g_uart_diag_status|g_uart_diag_output_ok|uart_diag_init|uart_diag_write_char|uart_diag_write_string|uart_diag_write_line|uart_diag_write_uint32|uart_diag_write_hex32'
 
 test-normal:
 	$(MAKE) FAULT_TEST_MODE=0 all

@@ -4,7 +4,9 @@
 #include "system_clock.h"
 #include "status_led.h"
 #include "system_time.h"
+#include "uart_diag.h"
 #include <stdint.h>
+
 
 /*
  * Existing clock diagnostic variables from Phase 2.1.4.
@@ -21,7 +23,35 @@ volatile uint32_t g_adcclk_hz;
  */
 volatile uint32_t g_main_loop_reached;
 volatile system_time_status_t g_system_time_status;
+volatile uart_diag_status_t g_uart_diag_status;
+volatile uint32_t g_uart_diag_output_ok;
 #define STATUS_LED_TOGGLE_INTERVAL_MS  500UL
+#define UART_DIAG_BAUD_RATE             115200UL
+
+static void uart_diag_record_result(bool success)
+{
+    if (!success)
+    {
+        g_uart_diag_output_ok = 0UL;
+    }
+}
+
+static void uart_diag_write_value_line(const char *label,
+                                       uint32_t value,
+                                       const char *unit)
+{
+    uart_diag_record_result(
+        uart_diag_write_string(label));
+
+    uart_diag_record_result(
+        uart_diag_write_uint32(value));
+
+    uart_diag_record_result(
+        uart_diag_write_string(unit));
+
+    uart_diag_record_result(
+        uart_diag_write_string("\r\n"));
+}
 
 int main(void)
 {
@@ -123,6 +153,71 @@ int main(void)
      * FAULT_TEST_MODE=3:
      *     Triggers the HardFault test.
      */
+    if (g_clock_status != SYSTEM_CLOCK_OK)
+    {
+        motor_outputs_force_safe();
+
+        for (;;)
+        {
+            __asm volatile ("nop");
+        }
+    }
+
+
+        /*
+    * PHASE 2.1.10: UART diagnostics initialization.
+    *
+    * USART1 is connected to PCLK2, so it must be initialized only
+    * after the clock tree is configured successfully.
+    */
+    g_uart_diag_status =
+        uart_diag_init(g_pclk2_hz,
+                    UART_DIAG_BAUD_RATE);
+
+    g_uart_diag_output_ok =
+        (g_uart_diag_status == UART_DIAG_OK) ?
+        1UL :
+        0UL;
+
+    /*
+    * UART failure is not a motor-safety failure.
+    *
+    * If UART initialization fails, firmware continues with the
+    * motors safe. The debugger-visible status records the failure.
+    */
+    if (g_uart_diag_status == UART_DIAG_OK)
+    {
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[BOOT] Motor node starting"));
+
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[CLOCK] Initialization OK"));
+
+        uart_diag_write_value_line(
+            "[CLOCK] SYSCLK = ",
+            g_sysclk_hz,
+            " Hz");
+
+        uart_diag_write_value_line(
+            "[CLOCK] HCLK   = ",
+            g_hclk_hz,
+            " Hz");
+
+        uart_diag_write_value_line(
+            "[CLOCK] PCLK1  = ",
+            g_pclk1_hz,
+            " Hz");
+
+        uart_diag_write_value_line(
+            "[CLOCK] PCLK2  = ",
+            g_pclk2_hz,
+            " Hz");
+    }
+
+    
+
     fault_test_run();
 
 
@@ -146,6 +241,17 @@ int main(void)
         motor_outputs_force_safe();
 
         /*
+        * Report the safety failure afterward.
+        */
+
+        if (g_uart_diag_status == UART_DIAG_OK)
+        {
+            uart_diag_record_result(
+                uart_diag_write_line(
+                    "[ERROR] Motor outputs are not safe"));
+        }
+
+        /*
          * Do not allow the firmware to enter its normal main loop
          * when the four pins cannot be verified safe.
          */
@@ -153,6 +259,13 @@ int main(void)
         {
             __asm volatile ("nop");
         }
+    }
+
+    if (g_uart_diag_status == UART_DIAG_OK)
+    {
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[SAFE] Motor outputs are LOW"));
     }
     
 
@@ -187,13 +300,30 @@ int main(void)
      */
     if (g_system_time_status != SYSTEM_TIME_OK)
     {
+        /*
+        * Safety actions always happen before diagnostic output.
+        */
         motor_outputs_force_safe();
         status_led_off();
+
+        if (g_uart_diag_status == UART_DIAG_OK)
+        {
+            uart_diag_record_result(
+                uart_diag_write_line(
+                    "[ERROR] SysTick initialization failed"));
+        }
 
         for (;;)
         {
             __asm volatile ("nop");
         }
+    }
+
+    if (g_uart_diag_status == UART_DIAG_OK)
+    {
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[TIME] SysTick initialized"));
     }
 
     /* ============================================================
@@ -205,6 +335,13 @@ int main(void)
     status_led_on();
 
     previous_heartbeat_ms = millis();
+
+    if (g_uart_diag_status == UART_DIAG_OK)
+    {
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[READY] Main loop started"));
+    }
 
 
     for (;;)
@@ -259,6 +396,7 @@ int main(void)
          *
          * No blocking delay is used here.
          */
+
         __asm volatile ("nop");
     }
 }
