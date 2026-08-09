@@ -56,6 +56,15 @@ volatile imu_acquisition_status_t
 #define ACCEL_CAPTURE_DURATION_US  5000000UL
 #define ACCEL_CAPTURE_MAX_SAMPLES 2600UL
 
+/*
+ * 20 minutes of actual recorded accelerometer data.
+ *
+ * 20 min = 1200 seconds
+ *
+ * 1200 / 5 = 240 capture blocks.
+ */
+#define ACCEL_CAPTURE_TOTAL_BLOCKS 240UL
+
 typedef struct
 {
     int16_t x;
@@ -239,36 +248,91 @@ static void accel_capture_write_signed(
 
 #if ACCEL_CAPTURE_TEST
 
-static void accel_capture_send_values(void)
+static void accel_capture_send_values(
+    uint32_t block_number)
 {
     uint32_t i;
 
     /*
-     * First line is the CSV header.
+     * Mark the beginning of one 5-second block.
+     */
+    (void)uart_diag_write_string(
+        "# ACCEL_CAPTURE_BEGIN block=");
+
+    (void)uart_diag_write_uint32(
+        block_number);
+
+    (void)uart_diag_write_string(
+        " samples=");
+
+    (void)uart_diag_write_uint32(
+        accel_capture_count);
+
+    (void)uart_diag_write_string(
+        "\r\n");
+
+    /*
+     * CSV header.
      */
     (void)uart_diag_write_line(
-        "ax_raw,ay_raw,az_raw");
+        "block,index,ax_raw,ay_raw,az_raw");
 
     for (i = 0UL;
          i < accel_capture_count;
          i++)
     {
+        /*
+         * Block number.
+         */
+        (void)uart_diag_write_uint32(
+            block_number);
+
+        (void)uart_diag_write_char(',');
+
+        /*
+         * Sample index inside this block.
+         */
+        (void)uart_diag_write_uint32(i);
+
+        (void)uart_diag_write_char(',');
+
+        /*
+         * Raw accelerometer X.
+         */
         accel_capture_write_signed(
             accel_capture_buffer[i].x);
 
         (void)uart_diag_write_char(',');
 
+        /*
+         * Raw accelerometer Y.
+         */
         accel_capture_write_signed(
             accel_capture_buffer[i].y);
 
         (void)uart_diag_write_char(',');
 
+        /*
+         * Raw accelerometer Z.
+         */
         accel_capture_write_signed(
             accel_capture_buffer[i].z);
 
         (void)uart_diag_write_string(
             "\r\n");
     }
+
+    /*
+     * Mark the end of this block.
+     */
+    (void)uart_diag_write_string(
+        "# ACCEL_CAPTURE_END block=");
+
+    (void)uart_diag_write_uint32(
+        block_number);
+
+    (void)uart_diag_write_string(
+        "\r\n");
 }
 
 #endif
@@ -284,120 +348,188 @@ void run_accel_capture_test(void)
     uint32_t start_time_us;
     uint32_t elapsed_us;
 
+    uint32_t block_number;
+
     bool started;
 
-    accel_capture_count = 0UL;
-    start_time_us = 0UL;
-    started = false;
-
     /*
-     * During this loop:
+     * -------------------------------------------------
+     * Repeat 5-second captures.
      *
-     * - normal IMU acquisition continues
-     * - no UART data is sent
-     * - only raw Ax/Ay/Az are stored
+     * 240 blocks × 5 seconds =
+     * 1200 seconds =
+     * 20 minutes of recorded accelerometer data.
+     * -------------------------------------------------
      */
-    for (;;)
+    for (block_number = 1UL;
+         block_number <= ACCEL_CAPTURE_TOTAL_BLOCKS;
+         block_number++)
     {
-        g_imu_acquisition_status =
-            imu_acquisition_process();
+        /*
+         * -------------------------------------------------
+         * Start a NEW capture block.
+         * -------------------------------------------------
+         *
+         * Setting count to zero logically discards the
+         * previous block.
+         *
+         * We do NOT need to erase the RAM physically.
+         * New samples simply overwrite the old samples.
+         */
+        accel_capture_count = 0UL;
 
-        if (g_imu_acquisition_status !=
-            IMU_ACQUISITION_OK)
-        {
-            continue;
-        }
+        start_time_us = 0UL;
+        elapsed_us = 0UL;
+        started = false;
 
-        if (!imu_acquisition_get_latest(
-                &sample))
+        /*
+         * -------------------------------------------------
+         * CAPTURE PHASE
+         *
+         * No UART transmission occurs inside this loop.
+         * -------------------------------------------------
+         */
+        for (;;)
         {
-            continue;
+            g_imu_acquisition_status =
+                imu_acquisition_process();
+
+            if (g_imu_acquisition_status !=
+                IMU_ACQUISITION_OK)
+            {
+                continue;
+            }
+
+            if (!imu_acquisition_get_latest(
+                    &sample))
+            {
+                continue;
+            }
+
+            /*
+             * Only accept valid motion samples.
+             */
+            if ((sample.flags &
+                 IMU_RAW_MOTION_VALID) == 0UL)
+            {
+                continue;
+            }
+
+            /*
+             * The first valid sample defines the
+             * beginning of this 5-second block.
+             */
+            if (!started)
+            {
+                start_time_us =
+                    sample.motion_timestamp_us;
+
+                started = true;
+            }
+
+            elapsed_us =
+                (uint32_t)(
+                    sample.motion_timestamp_us -
+                    start_time_us);
+
+            /*
+             * Five seconds completed.
+             */
+            if (elapsed_us >=
+                ACCEL_CAPTURE_DURATION_US)
+            {
+                break;
+            }
+
+            /*
+             * SRAM protection.
+             */
+            if (accel_capture_count >=
+                ACCEL_CAPTURE_MAX_SAMPLES)
+            {
+                break;
+            }
+
+            /*
+             * Store RAW accelerometer values only.
+             *
+             * No calibration.
+             * No scaling.
+             * No filtering.
+             */
+            accel_capture_buffer[
+                accel_capture_count].x =
+                    sample.motion.accel_x;
+
+            accel_capture_buffer[
+                accel_capture_count].y =
+                    sample.motion.accel_y;
+
+            accel_capture_buffer[
+                accel_capture_count].z =
+                    sample.motion.accel_z;
+
+            accel_capture_count++;
         }
 
         /*
-         * Make sure this sample contains
-         * valid accelerometer/gyro motion data.
+         * -------------------------------------------------
+         * TRANSMISSION PHASE
+         *
+         * Capture has finished.
+         * Now send this complete block through UART.
+         * -------------------------------------------------
          */
-        if ((sample.flags &
-             IMU_RAW_MOTION_VALID) == 0UL)
+        if (g_fc_uart_status == UART_DIAG_OK)
         {
-            continue;
+            (void)uart_diag_write_string(
+                "[ACCEL CAPTURE] block=");
+
+            (void)uart_diag_write_uint32(
+                block_number);
+
+            (void)uart_diag_write_string(
+                "/");
+
+            (void)uart_diag_write_uint32(
+                ACCEL_CAPTURE_TOTAL_BLOCKS);
+
+            (void)uart_diag_write_string(
+                " samples=");
+
+            (void)uart_diag_write_uint32(
+                accel_capture_count);
+
+            (void)uart_diag_write_string(
+                "\r\n");
+
+            /*
+             * Transmit every sample from this block.
+             */
+            accel_capture_send_values(
+                block_number);
         }
 
         /*
-         * Start the five-second timer using the
-         * timestamp of the first valid sample.
+         * -------------------------------------------------
+         * OLD BLOCK IS NOW FINISHED.
+         * -------------------------------------------------
+         *
+         * There is no reason to memset()/erase the RAM.
+         *
+         * On the next outer-loop iteration:
+         *
+         *     accel_capture_count = 0
+         *
+         * and new samples overwrite the old buffer.
          */
-        if (!started)
-        {
-            start_time_us =
-                sample.motion_timestamp_us;
-
-            started = true;
-        }
-
-        elapsed_us =
-            (uint32_t)(
-                sample.motion_timestamp_us -
-                start_time_us);
-
-        /*
-         * Stop after five seconds.
-         */
-        if (elapsed_us >=
-            ACCEL_CAPTURE_DURATION_US)
-        {
-            break;
-        }
-
-        /*
-         * Protect RAM buffer.
-         */
-        if (accel_capture_count >=
-            ACCEL_CAPTURE_MAX_SAMPLES)
-        {
-            break;
-        }
-
-        /*
-         * Store RAW accelerometer values only.
-         */
-        accel_capture_buffer[
-            accel_capture_count].x =
-                sample.motion.accel_x;
-
-        accel_capture_buffer[
-            accel_capture_count].y =
-                sample.motion.accel_y;
-
-        accel_capture_buffer[
-            accel_capture_count].z =
-                sample.motion.accel_z;
-
-        accel_capture_count++;
     }
 
     /*
-     * Five-second acquisition is complete.
-     *
-     * Only now start UART transmission.
+     * All 240 five-second capture blocks are complete.
      */
-    if (g_fc_uart_status == UART_DIAG_OK)
-    {
-        (void)uart_diag_write_string(
-            "[ACCEL CAPTURE] samples=");
-
-        (void)uart_diag_write_uint32(
-            accel_capture_count);
-
-        (void)uart_diag_write_string(
-            "\r\n");
-
-        accel_capture_send_values();
-    }
-
     stop_with_message(
-        "[HALT] Accelerometer capture finished");
+        "[HALT] 20-minute accelerometer capture finished");
 }
 
 #endif
@@ -862,7 +994,10 @@ if (g_fc_uart_status == UART_DIAG_OK)
 #if ACCEL_CAPTURE_TEST
 
     (void)uart_diag_write_line(
-        "[TEST] 5-second raw accelerometer capture");
+        "[TEST] Repeated 5-second accelerometer capture");
+
+    (void)uart_diag_write_line(
+        "[TEST] Target = 240 blocks = 20 minutes captured data");
 
 #endif
 
@@ -881,9 +1016,16 @@ if (g_imu_acquisition_status != IMU_ACQUISITION_OK)
 #if ACCEL_CAPTURE_TEST
 
 /*
- * This function captures for five seconds,
- * sends all values over UART,
- * then halts.
+ * Repeatedly:
+ *
+ * 1. Capture 5 seconds to RAM.
+ * 2. Send that block through UART.
+ * 3. Reuse the same RAM buffer.
+ *
+ * 240 capture blocks = 20 minutes
+ * of actual accelerometer measurements.
+ *
+ * Function halts after all blocks complete.
  */
 run_accel_capture_test();
 
