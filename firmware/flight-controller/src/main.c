@@ -1,4 +1,7 @@
 #include "fault_handlers.h"
+#if ACCEL_PIPELINE_ENABLE
+#include "accel_pipeline.h"
+#endif
 #include "imu_acquisition.h"
 #include "micros.h"
 #include "mpu9250.h"
@@ -22,6 +25,66 @@
 
 #ifndef ACCEL_CAPTURE_TEST
 #define ACCEL_CAPTURE_TEST 0
+#endif
+
+#ifndef ACCEL_PIPELINE_ENABLE
+#define ACCEL_PIPELINE_ENABLE 0
+#endif
+
+#ifndef MEASURE_PIPELINE_TIMES
+#define MEASURE_PIPELINE_TIMES 0
+#endif
+
+#if MEASURE_PIPELINE_TIMES && !ACCEL_PIPELINE_ENABLE
+#error "MEASURE_PIPELINE_TIMES requires ACCEL_PIPELINE_ENABLE=1"
+#endif
+
+#ifndef ACCEL_PIPELINE_DEBUG_RAW
+#define ACCEL_PIPELINE_DEBUG_RAW 0
+#endif
+
+#ifndef ACCEL_PIPELINE_DEBUG_MEDIAN
+#define ACCEL_PIPELINE_DEBUG_MEDIAN 0
+#endif
+
+#ifndef ACCEL_PIPELINE_DEBUG_CALIBRATED_G
+#define ACCEL_PIPELINE_DEBUG_CALIBRATED_G 0
+#endif
+
+#ifndef ACCEL_PIPELINE_DEBUG_FILTERED_G
+#define ACCEL_PIPELINE_DEBUG_FILTERED_G 0
+#endif
+
+#ifndef ACCEL_PIPELINE_DEBUG_MS2
+#define ACCEL_PIPELINE_DEBUG_MS2 0
+#endif
+
+#ifndef ACCEL_PIPELINE_DEBUG_DECIMATION
+#define ACCEL_PIPELINE_DEBUG_DECIMATION 50
+#endif
+
+#define ACCEL_PIPELINE_DEBUG_ACTIVE ( \
+    ACCEL_PIPELINE_DEBUG_RAW || \
+    ACCEL_PIPELINE_DEBUG_MEDIAN || \
+    ACCEL_PIPELINE_DEBUG_CALIBRATED_G || \
+    ACCEL_PIPELINE_DEBUG_FILTERED_G || \
+    ACCEL_PIPELINE_DEBUG_MS2)
+
+#define ACCEL_PIPELINE_DEBUG_INT_ACTIVE ( \
+    ACCEL_PIPELINE_DEBUG_RAW || \
+    ACCEL_PIPELINE_DEBUG_MEDIAN)
+
+#define ACCEL_PIPELINE_DEBUG_FLOAT_ACTIVE ( \
+    ACCEL_PIPELINE_DEBUG_CALIBRATED_G || \
+    ACCEL_PIPELINE_DEBUG_FILTERED_G || \
+    ACCEL_PIPELINE_DEBUG_MS2)
+
+#if ACCEL_PIPELINE_DEBUG_ACTIVE && !ACCEL_PIPELINE_ENABLE
+#error "Accelerometer pipeline debug requires ACCEL_PIPELINE_ENABLE=1"
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_ACTIVE && (ACCEL_PIPELINE_DEBUG_DECIMATION < 1)
+#error "ACCEL_PIPELINE_DEBUG_DECIMATION must be at least 1"
 #endif
 
 
@@ -85,6 +148,183 @@ volatile imu_raw_sample_t
 
 volatile imu_acquisition_stats_t
     g_imu_acquisition_stats;
+
+#if ACCEL_PIPELINE_ENABLE
+
+volatile accel_pipeline_output_t
+    g_latest_accel_pipeline_output;
+
+#endif
+
+#if MEASURE_PIPELINE_TIMES
+
+/*
+ * Pipeline-only execution-time statistics for GDB inspection.
+ * UART output is deliberately not used because it would disturb timing.
+ */
+volatile uint32_t g_pipeline_time_last_us;
+volatile uint32_t g_pipeline_time_min_us;
+volatile uint32_t g_pipeline_time_max_us;
+volatile uint64_t g_pipeline_time_total_us;
+volatile uint32_t g_pipeline_time_sample_count;
+
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_ACTIVE
+
+#if ACCEL_PIPELINE_DEBUG_INT_ACTIVE
+
+static void accel_debug_write_signed(int16_t value)
+{
+    int32_t wide;
+
+    wide = (int32_t)value;
+
+    if (wide < 0)
+    {
+        (void)uart_diag_write_char('-');
+        wide = -wide;
+    }
+
+    (void)uart_diag_write_uint32((uint32_t)wide);
+}
+
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_FLOAT_ACTIVE
+
+static void accel_debug_write_fixed3(float value)
+{
+    int32_t scaled;
+    uint32_t magnitude;
+    uint32_t fraction;
+
+    if (value < 0.0f)
+    {
+        scaled = (int32_t)((value * 1000.0f) - 0.5f);
+    }
+    else
+    {
+        scaled = (int32_t)((value * 1000.0f) + 0.5f);
+    }
+
+    if (scaled < 0)
+    {
+        (void)uart_diag_write_char('-');
+        magnitude = (uint32_t)(-scaled);
+    }
+    else
+    {
+        magnitude = (uint32_t)scaled;
+    }
+
+    (void)uart_diag_write_uint32(magnitude / 1000UL);
+    (void)uart_diag_write_char('.');
+
+    fraction = magnitude % 1000UL;
+
+    if (fraction < 100UL)
+    {
+        (void)uart_diag_write_char('0');
+    }
+
+    if (fraction < 10UL)
+    {
+        (void)uart_diag_write_char('0');
+    }
+
+    (void)uart_diag_write_uint32(fraction);
+}
+
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_INT_ACTIVE
+
+static void accel_debug_write_i16_triplet(
+    int16_t x,
+    int16_t y,
+    int16_t z)
+{
+    accel_debug_write_signed(x);
+    (void)uart_diag_write_char(',');
+    accel_debug_write_signed(y);
+    (void)uart_diag_write_char(',');
+    accel_debug_write_signed(z);
+}
+
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_FLOAT_ACTIVE
+
+static void accel_debug_write_float_triplet(
+    float x,
+    float y,
+    float z)
+{
+    accel_debug_write_fixed3(x);
+    (void)uart_diag_write_char(',');
+    accel_debug_write_fixed3(y);
+    (void)uart_diag_write_char(',');
+    accel_debug_write_fixed3(z);
+}
+
+#endif
+
+static void accel_debug_write_pipeline(
+    const accel_pipeline_output_t *output)
+{
+    (void)uart_diag_write_string("[ACCEL PIPE] seq=");
+    (void)uart_diag_write_uint32(output->sequence);
+
+    (void)uart_diag_write_string(" t_us=");
+    (void)uart_diag_write_uint32(output->timestamp_us);
+
+#if ACCEL_PIPELINE_DEBUG_RAW
+    (void)uart_diag_write_string(" raw=");
+    accel_debug_write_i16_triplet(
+        output->raw_x,
+        output->raw_y,
+        output->raw_z);
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_MEDIAN
+    (void)uart_diag_write_string(" median=");
+    accel_debug_write_i16_triplet(
+        output->median_x,
+        output->median_y,
+        output->median_z);
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_CALIBRATED_G
+    (void)uart_diag_write_string(" calibrated_g=");
+    accel_debug_write_float_triplet(
+        output->calibrated_x_g,
+        output->calibrated_y_g,
+        output->calibrated_z_g);
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_FILTERED_G
+    (void)uart_diag_write_string(" filtered_g=");
+    accel_debug_write_float_triplet(
+        output->filtered_x_g,
+        output->filtered_y_g,
+        output->filtered_z_g);
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_MS2
+    (void)uart_diag_write_string(" filtered_ms2=");
+    accel_debug_write_float_triplet(
+        output->filtered_x_ms2,
+        output->filtered_y_ms2,
+        output->filtered_z_ms2);
+#endif
+
+    (void)uart_diag_write_string(" flags=");
+    (void)uart_diag_write_hex32(output->flags);
+    (void)uart_diag_write_string("\r\n");
+}
+
+#endif
 
 #if ACQ_UART_RAW_DEBUG
 
@@ -688,6 +928,20 @@ int main(void)
 
     imu_raw_sample_t sample;
 
+#if ACCEL_PIPELINE_ENABLE
+    accel_pipeline_input_t accel_input;
+    accel_pipeline_output_t accel_output;
+#endif
+
+#if MEASURE_PIPELINE_TIMES
+    uint32_t pipeline_start_us;
+    uint32_t pipeline_elapsed_us;
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_ACTIVE
+    uint32_t accel_debug_sample_count;
+#endif
+
     fault_record_clear();
 
     g_fc_clock_status = system_clock_init();
@@ -953,6 +1207,31 @@ int main(void)
             "address and pull-ups");
     }
 
+#if ACCEL_PIPELINE_ENABLE
+    accel_pipeline_init();
+    g_latest_accel_pipeline_output =
+        (accel_pipeline_output_t){0};
+
+    if (g_fc_uart_status == UART_DIAG_OK)
+    {
+        (void)uart_diag_write_line(
+            "[ACCEL PIPE] median3 -> calibration -> "
+            "20Hz LPF -> m/s2");
+    }
+#endif
+
+#if MEASURE_PIPELINE_TIMES
+    g_pipeline_time_last_us = 0UL;
+    g_pipeline_time_min_us = 0UL;
+    g_pipeline_time_max_us = 0UL;
+    g_pipeline_time_total_us = 0ULL;
+    g_pipeline_time_sample_count = 0UL;
+#endif
+
+#if ACCEL_PIPELINE_DEBUG_ACTIVE
+    accel_debug_sample_count = 0UL;
+#endif
+
    if (g_fc_uart_status == UART_DIAG_OK)
     {
     #if IMU_MODEL == IMU_MODEL_MPU6500
@@ -1041,6 +1320,74 @@ for (;;)
             imu_acquisition_get_latest(&sample))
         {
             g_latest_raw_imu_sample = sample;
+
+#if ACCEL_PIPELINE_ENABLE
+            if ((sample.flags & IMU_RAW_MOTION_VALID) != 0UL)
+            {
+                accel_input.sequence = sample.sequence;
+                accel_input.timestamp_us =
+                    sample.motion_timestamp_us;
+                accel_input.raw_x = sample.motion.accel_x;
+                accel_input.raw_y = sample.motion.accel_y;
+                accel_input.raw_z = sample.motion.accel_z;
+
+#if MEASURE_PIPELINE_TIMES
+                pipeline_start_us = micros();
+#endif
+
+                if (accel_pipeline_process(
+                        &accel_input,
+                        &accel_output))
+                {
+#if MEASURE_PIPELINE_TIMES
+                    pipeline_elapsed_us =
+                        micros() - pipeline_start_us;
+
+                    g_pipeline_time_last_us =
+                        pipeline_elapsed_us;
+
+                    if ((g_pipeline_time_sample_count == 0UL) ||
+                        (pipeline_elapsed_us <
+                         g_pipeline_time_min_us))
+                    {
+                        g_pipeline_time_min_us =
+                            pipeline_elapsed_us;
+                    }
+
+                    if (pipeline_elapsed_us >
+                        g_pipeline_time_max_us)
+                    {
+                        g_pipeline_time_max_us =
+                            pipeline_elapsed_us;
+                    }
+
+                    g_pipeline_time_total_us +=
+                        (uint64_t)pipeline_elapsed_us;
+                    g_pipeline_time_sample_count++;
+#endif
+
+                    g_latest_accel_pipeline_output =
+                        accel_output;
+
+#if ACCEL_PIPELINE_DEBUG_ACTIVE
+                    accel_debug_sample_count++;
+
+                    if (accel_debug_sample_count >=
+                        (uint32_t)
+                        ACCEL_PIPELINE_DEBUG_DECIMATION)
+                    {
+                        accel_debug_sample_count = 0UL;
+
+                        if (g_fc_uart_status == UART_DIAG_OK)
+                        {
+                            accel_debug_write_pipeline(
+                                &accel_output);
+                        }
+                    }
+#endif
+                }
+            }
+#endif
         }
 
         g_imu_acquisition_stats =

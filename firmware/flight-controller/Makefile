@@ -7,6 +7,61 @@ I2C_RECOVERY_TEST ?= 0
 I2C_BUS_HZ ?= 400000
 IMU_MODEL ?= 9250
 ACCEL_CAPTURE_TEST ?= 0
+ACCEL_PIPELINE_ENABLE ?= 0
+MEASURE_PIPELINE_TIMES ?= 0
+ACCEL_PIPELINE_DEBUG_RAW ?= 0
+ACCEL_PIPELINE_DEBUG_MEDIAN ?= 0
+ACCEL_PIPELINE_DEBUG_CALIBRATED_G ?= 0
+ACCEL_PIPELINE_DEBUG_FILTERED_G ?= 0
+ACCEL_PIPELINE_DEBUG_MS2 ?= 0
+ACCEL_PIPELINE_DEBUG_DECIMATION ?= 50
+
+BOOLEAN_BUILD_VALUES := \
+	$(ACQ_UART_RAW_DEBUG) \
+	$(MPU_WHO_AM_I_TEST) \
+	$(IMU_INIT_DEBUG) \
+	$(I2C_RECOVERY_TEST) \
+	$(ACCEL_CAPTURE_TEST) \
+	$(ACCEL_PIPELINE_ENABLE) \
+	$(MEASURE_PIPELINE_TIMES) \
+	$(ACCEL_PIPELINE_DEBUG_RAW) \
+	$(ACCEL_PIPELINE_DEBUG_MEDIAN) \
+	$(ACCEL_PIPELINE_DEBUG_CALIBRATED_G) \
+	$(ACCEL_PIPELINE_DEBUG_FILTERED_G) \
+	$(ACCEL_PIPELINE_DEBUG_MS2)
+
+ifneq ($(filter-out 0 1,$(BOOLEAN_BUILD_VALUES)),)
+$(error All enable/debug build flags must be 0 or 1)
+endif
+
+ACCEL_PIPELINE_DEBUG_VALUES := \
+	$(ACCEL_PIPELINE_DEBUG_RAW) \
+	$(ACCEL_PIPELINE_DEBUG_MEDIAN) \
+	$(ACCEL_PIPELINE_DEBUG_CALIBRATED_G) \
+	$(ACCEL_PIPELINE_DEBUG_FILTERED_G) \
+	$(ACCEL_PIPELINE_DEBUG_MS2)
+
+ifneq ($(filter 1,$(ACCEL_PIPELINE_DEBUG_VALUES)),)
+ifneq ($(ACCEL_PIPELINE_ENABLE),1)
+$(error Accelerometer pipeline debug requires ACCEL_PIPELINE_ENABLE=1)
+endif
+endif
+
+ifeq ($(MEASURE_PIPELINE_TIMES),1)
+ifneq ($(ACCEL_PIPELINE_ENABLE),1)
+$(error MEASURE_PIPELINE_TIMES requires ACCEL_PIPELINE_ENABLE=1)
+endif
+endif
+
+ifeq ($(ACCEL_PIPELINE_ENABLE),1)
+ifneq ($(IMU_MODEL),6500)
+$(error Current accelerometer calibration constants belong to IMU_MODEL=6500)
+endif
+endif
+
+ifeq ($(ACCEL_CAPTURE_TEST)$(ACCEL_PIPELINE_ENABLE),11)
+$(warning ACCEL_CAPTURE_TEST owns the main loop; pipeline processing/debug will not run)
+endif
 
 
 VALID_IMU_MODELS := 6500 9250
@@ -47,6 +102,14 @@ CFLAGS := $(CPU_FLAGS) \
 	-DI2C_BUS_HZ=$(I2C_BUS_HZ) \
 	-DIMU_MODEL=$(IMU_MODEL) \
 	-DACCEL_CAPTURE_TEST=$(ACCEL_CAPTURE_TEST) \
+	-DACCEL_PIPELINE_ENABLE=$(ACCEL_PIPELINE_ENABLE) \
+	-DMEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES) \
+	-DACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW) \
+	-DACCEL_PIPELINE_DEBUG_MEDIAN=$(ACCEL_PIPELINE_DEBUG_MEDIAN) \
+	-DACCEL_PIPELINE_DEBUG_CALIBRATED_G=$(ACCEL_PIPELINE_DEBUG_CALIBRATED_G) \
+	-DACCEL_PIPELINE_DEBUG_FILTERED_G=$(ACCEL_PIPELINE_DEBUG_FILTERED_G) \
+	-DACCEL_PIPELINE_DEBUG_MS2=$(ACCEL_PIPELINE_DEBUG_MS2) \
+	-DACCEL_PIPELINE_DEBUG_DECIMATION=$(ACCEL_PIPELINE_DEBUG_DECIMATION) \
 	-Iinclude \
 	-I$(PLATFORM_DIR)/include \
 	-I$(MPU_DIR)/include \
@@ -74,21 +137,50 @@ SOURCES := \
 	$(PLATFORM_DIR)/src/system_time.c \
 	$(PLATFORM_DIR)/src/uart_diag.c
 
+ifeq ($(ACCEL_PIPELINE_ENABLE),1)
+SOURCES += src/accel_pipeline.c
+endif
+
 OBJECTS := \
 	$(addprefix $(BUILD_DIR)/,$(notdir $(SOURCES:.c=.o)))
 
 DEPS := $(OBJECTS:.o=.d)
+CONFIG_STAMP := $(BUILD_DIR)/.build-config
 
 ELF := $(BUILD_DIR)/$(PROJECT).elf
 BIN := $(BUILD_DIR)/$(PROJECT).bin
 HEX := $(BUILD_DIR)/$(PROJECT).hex
 
-.PHONY: all clean size inspect test-host
+.PHONY: all clean size inspect test-host test-accel-host FORCE
 
 all: $(ELF) $(BIN) $(HEX) size
 
 $(BUILD_DIR):
 	mkdir -p $@
+
+FORCE:
+
+$(CONFIG_STAMP): FORCE | $(BUILD_DIR)
+	@printf '%s\n' \
+		'IMU_MODEL=$(IMU_MODEL)' \
+		'I2C_BUS_HZ=$(I2C_BUS_HZ)' \
+		'ACQ_UART_RAW_DEBUG=$(ACQ_UART_RAW_DEBUG)' \
+		'MPU_WHO_AM_I_TEST=$(MPU_WHO_AM_I_TEST)' \
+		'IMU_INIT_DEBUG=$(IMU_INIT_DEBUG)' \
+		'I2C_RECOVERY_TEST=$(I2C_RECOVERY_TEST)' \
+		'ACCEL_CAPTURE_TEST=$(ACCEL_CAPTURE_TEST)' \
+		'ACCEL_PIPELINE_ENABLE=$(ACCEL_PIPELINE_ENABLE)' \
+		'MEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES)' \
+		'ACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW)' \
+		'ACCEL_PIPELINE_DEBUG_MEDIAN=$(ACCEL_PIPELINE_DEBUG_MEDIAN)' \
+		'ACCEL_PIPELINE_DEBUG_CALIBRATED_G=$(ACCEL_PIPELINE_DEBUG_CALIBRATED_G)' \
+		'ACCEL_PIPELINE_DEBUG_FILTERED_G=$(ACCEL_PIPELINE_DEBUG_FILTERED_G)' \
+		'ACCEL_PIPELINE_DEBUG_MS2=$(ACCEL_PIPELINE_DEBUG_MS2)' \
+		'ACCEL_PIPELINE_DEBUG_DECIMATION=$(ACCEL_PIPELINE_DEBUG_DECIMATION)' \
+		> $@.tmp
+	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
+
+$(OBJECTS): $(CONFIG_STAMP)
 
 define COMPILE_template
 $(BUILD_DIR)/$(notdir $(1:.c=.o)): $(1) | $(BUILD_DIR)
@@ -113,7 +205,7 @@ size: $(ELF)
 inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(NM) -n $(ELF) | grep -E \
-		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_imu_acquisition_stats|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
+		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
 
 test-host:
 	mkdir -p build/host
@@ -130,6 +222,22 @@ test-host:
 		$(MPU_DIR)/src/mpu9250.c \
 		-o build/host/mpu9250_decode_test
 	./build/host/mpu9250_decode_test
+
+test-accel-host:
+	mkdir -p build/host
+	$(HOST_CC) \
+		-std=c11 \
+		-Wall \
+		-Wextra \
+		-Werror \
+		-O0 \
+		-g3 \
+		-Iinclude \
+		tests/accel_pipeline_test.c \
+		src/accel_pipeline.c \
+		-lm \
+		-o build/host/accel_pipeline_test
+	./build/host/accel_pipeline_test
 
 clean:
 	rm -rf $(BUILD_DIR)

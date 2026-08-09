@@ -1,3 +1,15 @@
+Archive member included to satisfy reference by file (symbol)
+
+/usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+                              build/main.o (__aeabi_fmul)
+/usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+                              build/main.o (__aeabi_fsub)
+/usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+                              build/accel_pipeline.o (__aeabi_fdiv)
+/usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+                              build/main.o (__aeabi_fcmplt)
+/usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
+                              build/main.o (__aeabi_f2iz)
 
 Discarded input sections
 
@@ -7,13 +19,10 @@ Discarded input sections
  .group         0x00000000        0xc build/main.o
  .group         0x00000000        0xc build/main.o
  .group         0x00000000        0xc build/main.o
+ .group         0x00000000        0xc build/main.o
  .text          0x00000000        0x0 build/main.o
  .data          0x00000000        0x0 build/main.o
  .bss           0x00000000        0x0 build/main.o
- .bss.g_latest_raw_imu_sample
-                0x00000000       0x24 build/main.o
- .bss.g_imu_acquisition_stats
-                0x00000000       0x24 build/main.o
  .comment       0x00000000       0x27 build/main.o
  .group         0x00000000        0xc build/imu_acquisition.o
  .group         0x00000000        0xc build/imu_acquisition.o
@@ -24,12 +33,9 @@ Discarded input sections
  .text          0x00000000        0x0 build/imu_acquisition.o
  .data          0x00000000        0x0 build/imu_acquisition.o
  .bss           0x00000000        0x0 build/imu_acquisition.o
- .text.imu_acquisition_get_stats
-                0x00000000       0x54 build/imu_acquisition.o
- .debug_macro   0x00000000      0xaea build/imu_acquisition.o
+ .debug_macro   0x00000000      0xb1a build/imu_acquisition.o
  .debug_macro   0x00000000       0x22 build/imu_acquisition.o
  .debug_macro   0x00000000      0x34e build/imu_acquisition.o
- .debug_macro   0x00000000       0x10 build/imu_acquisition.o
  .debug_macro   0x00000000       0x16 build/imu_acquisition.o
  .debug_macro   0x00000000      0x190 build/imu_acquisition.o
  .comment       0x00000000       0x27 build/imu_acquisition.o
@@ -38,7 +44,7 @@ Discarded input sections
  .text          0x00000000        0x0 build/flight_fault_handlers.o
  .data          0x00000000        0x0 build/flight_fault_handlers.o
  .bss           0x00000000        0x0 build/flight_fault_handlers.o
- .debug_macro   0x00000000      0xaea build/flight_fault_handlers.o
+ .debug_macro   0x00000000      0xb1a build/flight_fault_handlers.o
  .debug_macro   0x00000000      0x34e build/flight_fault_handlers.o
  .comment       0x00000000       0x27 build/flight_fault_handlers.o
  .group         0x00000000        0xc build/freestanding_mem.o
@@ -46,7 +52,7 @@ Discarded input sections
  .text          0x00000000        0x0 build/freestanding_mem.o
  .data          0x00000000        0x0 build/freestanding_mem.o
  .bss           0x00000000        0x0 build/freestanding_mem.o
- .debug_macro   0x00000000      0xaea build/freestanding_mem.o
+ .debug_macro   0x00000000      0xb1a build/freestanding_mem.o
  .debug_macro   0x00000000      0x190 build/freestanding_mem.o
  .comment       0x00000000       0x27 build/freestanding_mem.o
  .group         0x00000000        0xc build/startup_stm32f103c8.o
@@ -60,7 +66,7 @@ Discarded input sections
                 0x00000000        0x8 build/startup_stm32f103c8.o
  .text.TIM2_IRQHandler
                 0x00000000        0x8 build/startup_stm32f103c8.o
- .debug_macro   0x00000000      0xaea build/startup_stm32f103c8.o
+ .debug_macro   0x00000000      0xb1a build/startup_stm32f103c8.o
  .debug_macro   0x00000000      0x34e build/startup_stm32f103c8.o
  .comment       0x00000000       0x27 build/startup_stm32f103c8.o
  .group         0x00000000        0xc build/mpu9250.o
@@ -75,7 +81,9 @@ Discarded input sections
                 0x00000000       0x38 build/mpu9250.o
  .text.mpu9250_device
                 0x00000000       0x14 build/mpu9250.o
- .debug_macro   0x00000000      0xaea build/mpu9250.o
+ .text.mpu9250_get_init_diag
+                0x00000000       0x28 build/mpu9250.o
+ .debug_macro   0x00000000      0xb1a build/mpu9250.o
  .debug_macro   0x00000000       0x22 build/mpu9250.o
  .debug_macro   0x00000000      0x34e build/mpu9250.o
  .debug_macro   0x00000000       0x10 build/mpu9250.o
@@ -90,7 +98,9 @@ Discarded input sections
  .bss           0x00000000        0x0 build/i2c1.o
  .text.i2c1_recover
                 0x00000000        0xe build/i2c1.o
- .debug_macro   0x00000000      0xaea build/i2c1.o
+ .text.i2c1_get_diag
+                0x00000000      0x13c build/i2c1.o
+ .debug_macro   0x00000000      0xb1a build/i2c1.o
  .debug_macro   0x00000000      0x190 build/i2c1.o
  .debug_macro   0x00000000      0x34e build/i2c1.o
  .debug_macro   0x00000000       0x22 build/i2c1.o
@@ -100,7 +110,7 @@ Discarded input sections
  .text          0x00000000        0x0 build/micros.o
  .data          0x00000000        0x0 build/micros.o
  .bss           0x00000000        0x0 build/micros.o
- .debug_macro   0x00000000      0xaea build/micros.o
+ .debug_macro   0x00000000      0xb1a build/micros.o
  .debug_macro   0x00000000      0x34e build/micros.o
  .comment       0x00000000       0x27 build/micros.o
  .group         0x00000000        0xc build/system_clock.o
@@ -113,7 +123,7 @@ Discarded input sections
                 0x00000000       0x14 build/system_clock.o
  .text.system_clock_get_adcclk_hz
                 0x00000000       0x14 build/system_clock.o
- .debug_macro   0x00000000      0xaea build/system_clock.o
+ .debug_macro   0x00000000      0xb1a build/system_clock.o
  .debug_macro   0x00000000      0x34e build/system_clock.o
  .debug_macro   0x00000000       0x22 build/system_clock.o
  .comment       0x00000000       0x27 build/system_clock.o
@@ -123,7 +133,7 @@ Discarded input sections
  .data          0x00000000        0x0 build/system_time.o
  .bss           0x00000000        0x0 build/system_time.o
  .text.millis   0x00000000       0x14 build/system_time.o
- .debug_macro   0x00000000      0xaea build/system_time.o
+ .debug_macro   0x00000000      0xb1a build/system_time.o
  .debug_macro   0x00000000      0x34e build/system_time.o
  .comment       0x00000000       0x27 build/system_time.o
  .group         0x00000000        0xc build/uart_diag.o
@@ -132,10 +142,44 @@ Discarded input sections
  .text          0x00000000        0x0 build/uart_diag.o
  .data          0x00000000        0x0 build/uart_diag.o
  .bss           0x00000000        0x0 build/uart_diag.o
- .debug_macro   0x00000000      0xaea build/uart_diag.o
+ .debug_macro   0x00000000      0xb1a build/uart_diag.o
  .debug_macro   0x00000000       0x22 build/uart_diag.o
  .debug_macro   0x00000000      0x34e build/uart_diag.o
  .comment       0x00000000       0x27 build/uart_diag.o
+ .group         0x00000000        0xc build/accel_pipeline.o
+ .group         0x00000000        0xc build/accel_pipeline.o
+ .group         0x00000000        0xc build/accel_pipeline.o
+ .group         0x00000000        0xc build/accel_pipeline.o
+ .text          0x00000000        0x0 build/accel_pipeline.o
+ .data          0x00000000        0x0 build/accel_pipeline.o
+ .bss           0x00000000        0x0 build/accel_pipeline.o
+ .debug_macro   0x00000000      0xb1a build/accel_pipeline.o
+ .debug_macro   0x00000000       0x22 build/accel_pipeline.o
+ .debug_macro   0x00000000      0x34e build/accel_pipeline.o
+ .debug_macro   0x00000000       0x22 build/accel_pipeline.o
+ .comment       0x00000000       0x27 build/accel_pipeline.o
+ .text          0x00000000      0x168 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .data          0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .bss           0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .debug_line    0x00000000       0xbd /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .debug_line_str
+                0x00000000       0x98 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .debug_info    0x00000000       0x3f /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .debug_abbrev  0x00000000       0x26 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .debug_aranges
+                0x00000000       0x20 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .debug_str     0x00000000       0xba /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .debug_frame   0x00000000       0x24 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .ARM.attributes
+                0x00000000       0x1d /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_mulsf3.o)
+ .data          0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .bss           0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .data          0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .bss           0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .data          0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .bss           0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .data          0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
+ .bss           0x00000000        0x0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
 
 Memory Configuration
 
@@ -157,6 +201,7 @@ LOAD build/micros.o
 LOAD build/system_clock.o
 LOAD build/system_time.o
 LOAD build/uart_diag.o
+LOAD build/accel_pipeline.o
 LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a
                 0x20005000                        _estack = (ORIGIN (RAM) + LENGTH (RAM))
 
@@ -167,393 +212,444 @@ LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a
                 0x08000000                vector_table
                 0x080000ec                        . = ALIGN (0x4)
 
-.text           0x080000ec     0x321c
+.text           0x080000ec     0x36d4
                 0x080000ec                        . = ALIGN (0x4)
  *(.text)
+ .text          0x080000ec      0x21c /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+                0x080000ec                __aeabi_frsub
+                0x080000f4                __subsf3
+                0x080000f4                __aeabi_fsub
+                0x080000f8                __aeabi_fadd
+                0x080000f8                __addsf3
+                0x08000258                __aeabi_ui2f
+                0x08000258                __floatunsisf
+                0x08000260                __aeabi_i2f
+                0x08000260                __floatsisf
+                0x0800027c                __floatundisf
+                0x0800027c                __aeabi_ul2f
+                0x0800028c                __floatdisf
+                0x0800028c                __aeabi_l2f
+ .text          0x08000308      0x2a0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+                0x08000308                __mulsf3
+                0x08000308                __aeabi_fmul
+                0x08000470                __divsf3
+                0x08000470                __aeabi_fdiv
+ .text          0x080005a8       0xec /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+                0x080005a8                __gtsf2
+                0x080005a8                __gesf2
+                0x080005b0                __lesf2
+                0x080005b0                __ltsf2
+                0x080005b8                __nesf2
+                0x080005b8                __eqsf2
+                0x080005b8                __cmpsf2
+                0x08000618                __aeabi_cfrcmple
+                0x08000620                __aeabi_cfcmple
+                0x08000620                __aeabi_cfcmpeq
+                0x08000630                __aeabi_fcmpeq
+                0x08000644                __aeabi_fcmplt
+                0x08000658                __aeabi_fcmple
+                0x0800066c                __aeabi_fcmpge
+                0x08000680                __aeabi_fcmpgt
+ .text          0x08000694       0x4c /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
+                0x08000694                __fixsfsi
+                0x08000694                __aeabi_f2iz
  *(.text*)
+ .text.accel_debug_write_signed
+                0x080006e0       0x32 build/main.o
+ *fill*         0x08000712        0x2 
+ .text.accel_debug_write_fixed3
+                0x08000714       0xcc build/main.o
+ .text.accel_debug_write_i16_triplet
+                0x080007e0       0x44 build/main.o
+ .text.accel_debug_write_float_triplet
+                0x08000824       0x32 build/main.o
+ *fill*         0x08000856        0x2 
+ .text.accel_debug_write_pipeline
+                0x08000858       0x94 build/main.o
  .text.stop_with_message
-                0x080000ec       0x20 build/main.o
- .text.accel_capture_write_signed
-                0x0800010c       0x32 build/main.o
- *fill*         0x0800013e        0x2 
- .text.accel_capture_send_values
-                0x08000140       0xf4 build/main.o
- .text.run_accel_capture_test
-                0x08000234      0x16c build/main.o
- .text.main     0x080003a0      0x4b8 build/main.o
-                0x080003a0                main
+                0x080008ec       0x20 build/main.o
+ .text.main     0x0800090c      0x2d4 build/main.o
+                0x0800090c                main
  .text.enter_critical
-                0x08000858       0x1a build/imu_acquisition.o
+                0x08000be0       0x1a build/imu_acquisition.o
  .text.exit_critical
-                0x08000872       0x1e build/imu_acquisition.o
+                0x08000bfa       0x1e build/imu_acquisition.o
  .text.data_ready_exti_init
-                0x08000890       0xd4 build/imu_acquisition.o
+                0x08000c18       0xd4 build/imu_acquisition.o
  .text.imu_acquisition_init
-                0x08000964       0xb8 build/imu_acquisition.o
-                0x08000964                imu_acquisition_init
+                0x08000cec       0xb8 build/imu_acquisition.o
+                0x08000cec                imu_acquisition_init
  .text.imu_acquisition_start
-                0x08000a1c       0x4c build/imu_acquisition.o
-                0x08000a1c                imu_acquisition_start
+                0x08000da4       0x4c build/imu_acquisition.o
+                0x08000da4                imu_acquisition_start
  .text.imu_acquisition_process
-                0x08000a68      0x18c build/imu_acquisition.o
-                0x08000a68                imu_acquisition_process
+                0x08000df0      0x18c build/imu_acquisition.o
+                0x08000df0                imu_acquisition_process
  .text.imu_acquisition_get_latest
-                0x08000bf4       0x50 build/imu_acquisition.o
-                0x08000bf4                imu_acquisition_get_latest
+                0x08000f7c       0x50 build/imu_acquisition.o
+                0x08000f7c                imu_acquisition_get_latest
+ .text.imu_acquisition_get_stats
+                0x08000fcc       0x54 build/imu_acquisition.o
+                0x08000fcc                imu_acquisition_get_stats
  .text.imu_acquisition_last_driver_status
-                0x08000c44       0x14 build/imu_acquisition.o
-                0x08000c44                imu_acquisition_last_driver_status
+                0x08001020       0x14 build/imu_acquisition.o
+                0x08001020                imu_acquisition_last_driver_status
  .text.EXTI0_IRQHandler
-                0x08000c58       0x54 build/imu_acquisition.o
-                0x08000c58                EXTI0_IRQHandler
- .text.stop     0x08000cac        0xa build/flight_fault_handlers.o
- *fill*         0x08000cb6        0x2 
+                0x08001034       0x54 build/imu_acquisition.o
+                0x08001034                EXTI0_IRQHandler
+ .text.stop     0x08001088        0xa build/flight_fault_handlers.o
+ *fill*         0x08001092        0x2 
  .text.fault_record_clear
-                0x08000cb8       0x40 build/flight_fault_handlers.o
-                0x08000cb8                fault_record_clear
+                0x08001094       0x40 build/flight_fault_handlers.o
+                0x08001094                fault_record_clear
  .text.Default_Handler
-                0x08000cf8       0x1c build/flight_fault_handlers.o
-                0x08000cf8                Default_Handler
+                0x080010d4       0x1c build/flight_fault_handlers.o
+                0x080010d4                Default_Handler
  .text.NMI_Handler
-                0x08000d14       0x1c build/flight_fault_handlers.o
-                0x08000d14                NMI_Handler
+                0x080010f0       0x1c build/flight_fault_handlers.o
+                0x080010f0                NMI_Handler
  .text.HardFault_Handler
-                0x08000d30       0x1c build/flight_fault_handlers.o
-                0x08000d30                HardFault_Handler
- .text.memset   0x08000d4c       0x3a build/freestanding_mem.o
-                0x08000d4c                memset
+                0x0800110c       0x1c build/flight_fault_handlers.o
+                0x0800110c                HardFault_Handler
+ .text.memset   0x08001128       0x3a build/freestanding_mem.o
+                0x08001128                memset
  .text.MemManage_Handler
-                0x08000d86        0x8 build/startup_stm32f103c8.o
-                0x08000d86                MemManage_Handler
+                0x08001162        0x8 build/startup_stm32f103c8.o
+                0x08001162                MemManage_Handler
  .text.BusFault_Handler
-                0x08000d8e        0x8 build/startup_stm32f103c8.o
-                0x08000d8e                BusFault_Handler
+                0x0800116a        0x8 build/startup_stm32f103c8.o
+                0x0800116a                BusFault_Handler
  .text.UsageFault_Handler
-                0x08000d96        0x8 build/startup_stm32f103c8.o
-                0x08000d96                UsageFault_Handler
+                0x08001172        0x8 build/startup_stm32f103c8.o
+                0x08001172                UsageFault_Handler
  .text.SVC_Handler
-                0x08000d9e        0x8 build/startup_stm32f103c8.o
-                0x08000d9e                SVC_Handler
+                0x0800117a        0x8 build/startup_stm32f103c8.o
+                0x0800117a                SVC_Handler
  .text.DebugMon_Handler
-                0x08000da6        0x8 build/startup_stm32f103c8.o
-                0x08000da6                DebugMon_Handler
+                0x08001182        0x8 build/startup_stm32f103c8.o
+                0x08001182                DebugMon_Handler
  .text.PendSV_Handler
-                0x08000dae        0x8 build/startup_stm32f103c8.o
-                0x08000dae                PendSV_Handler
+                0x0800118a        0x8 build/startup_stm32f103c8.o
+                0x0800118a                PendSV_Handler
  .text.WWDG_IRQHandler
-                0x08000db6        0x8 build/startup_stm32f103c8.o
-                0x08000db6                WWDG_IRQHandler
+                0x08001192        0x8 build/startup_stm32f103c8.o
+                0x08001192                WWDG_IRQHandler
  .text.PVD_IRQHandler
-                0x08000dbe        0x8 build/startup_stm32f103c8.o
-                0x08000dbe                PVD_IRQHandler
+                0x0800119a        0x8 build/startup_stm32f103c8.o
+                0x0800119a                PVD_IRQHandler
  .text.TAMPER_IRQHandler
-                0x08000dc6        0x8 build/startup_stm32f103c8.o
-                0x08000dc6                TAMPER_IRQHandler
+                0x080011a2        0x8 build/startup_stm32f103c8.o
+                0x080011a2                TAMPER_IRQHandler
  .text.RTC_IRQHandler
-                0x08000dce        0x8 build/startup_stm32f103c8.o
-                0x08000dce                RTC_IRQHandler
+                0x080011aa        0x8 build/startup_stm32f103c8.o
+                0x080011aa                RTC_IRQHandler
  .text.FLASH_IRQHandler
-                0x08000dd6        0x8 build/startup_stm32f103c8.o
-                0x08000dd6                FLASH_IRQHandler
+                0x080011b2        0x8 build/startup_stm32f103c8.o
+                0x080011b2                FLASH_IRQHandler
  .text.RCC_IRQHandler
-                0x08000dde        0x8 build/startup_stm32f103c8.o
-                0x08000dde                RCC_IRQHandler
+                0x080011ba        0x8 build/startup_stm32f103c8.o
+                0x080011ba                RCC_IRQHandler
  .text.EXTI1_IRQHandler
-                0x08000de6        0x8 build/startup_stm32f103c8.o
-                0x08000de6                EXTI1_IRQHandler
+                0x080011c2        0x8 build/startup_stm32f103c8.o
+                0x080011c2                EXTI1_IRQHandler
  .text.EXTI2_IRQHandler
-                0x08000dee        0x8 build/startup_stm32f103c8.o
-                0x08000dee                EXTI2_IRQHandler
+                0x080011ca        0x8 build/startup_stm32f103c8.o
+                0x080011ca                EXTI2_IRQHandler
  .text.EXTI3_IRQHandler
-                0x08000df6        0x8 build/startup_stm32f103c8.o
-                0x08000df6                EXTI3_IRQHandler
+                0x080011d2        0x8 build/startup_stm32f103c8.o
+                0x080011d2                EXTI3_IRQHandler
  .text.EXTI4_IRQHandler
-                0x08000dfe        0x8 build/startup_stm32f103c8.o
-                0x08000dfe                EXTI4_IRQHandler
+                0x080011da        0x8 build/startup_stm32f103c8.o
+                0x080011da                EXTI4_IRQHandler
  .text.DMA1_Channel1_IRQHandler
-                0x08000e06        0x8 build/startup_stm32f103c8.o
-                0x08000e06                DMA1_Channel1_IRQHandler
+                0x080011e2        0x8 build/startup_stm32f103c8.o
+                0x080011e2                DMA1_Channel1_IRQHandler
  .text.DMA1_Channel2_IRQHandler
-                0x08000e0e        0x8 build/startup_stm32f103c8.o
-                0x08000e0e                DMA1_Channel2_IRQHandler
+                0x080011ea        0x8 build/startup_stm32f103c8.o
+                0x080011ea                DMA1_Channel2_IRQHandler
  .text.DMA1_Channel3_IRQHandler
-                0x08000e16        0x8 build/startup_stm32f103c8.o
-                0x08000e16                DMA1_Channel3_IRQHandler
+                0x080011f2        0x8 build/startup_stm32f103c8.o
+                0x080011f2                DMA1_Channel3_IRQHandler
  .text.DMA1_Channel4_IRQHandler
-                0x08000e1e        0x8 build/startup_stm32f103c8.o
-                0x08000e1e                DMA1_Channel4_IRQHandler
+                0x080011fa        0x8 build/startup_stm32f103c8.o
+                0x080011fa                DMA1_Channel4_IRQHandler
  .text.DMA1_Channel5_IRQHandler
-                0x08000e26        0x8 build/startup_stm32f103c8.o
-                0x08000e26                DMA1_Channel5_IRQHandler
+                0x08001202        0x8 build/startup_stm32f103c8.o
+                0x08001202                DMA1_Channel5_IRQHandler
  .text.DMA1_Channel6_IRQHandler
-                0x08000e2e        0x8 build/startup_stm32f103c8.o
-                0x08000e2e                DMA1_Channel6_IRQHandler
+                0x0800120a        0x8 build/startup_stm32f103c8.o
+                0x0800120a                DMA1_Channel6_IRQHandler
  .text.DMA1_Channel7_IRQHandler
-                0x08000e36        0x8 build/startup_stm32f103c8.o
-                0x08000e36                DMA1_Channel7_IRQHandler
+                0x08001212        0x8 build/startup_stm32f103c8.o
+                0x08001212                DMA1_Channel7_IRQHandler
  .text.ADC1_2_IRQHandler
-                0x08000e3e        0x8 build/startup_stm32f103c8.o
-                0x08000e3e                ADC1_2_IRQHandler
+                0x0800121a        0x8 build/startup_stm32f103c8.o
+                0x0800121a                ADC1_2_IRQHandler
  .text.USB_HP_CAN1_TX_IRQHandler
-                0x08000e46        0x8 build/startup_stm32f103c8.o
-                0x08000e46                USB_HP_CAN1_TX_IRQHandler
+                0x08001222        0x8 build/startup_stm32f103c8.o
+                0x08001222                USB_HP_CAN1_TX_IRQHandler
  .text.USB_LP_CAN1_RX0_IRQHandler
-                0x08000e4e        0x8 build/startup_stm32f103c8.o
-                0x08000e4e                USB_LP_CAN1_RX0_IRQHandler
+                0x0800122a        0x8 build/startup_stm32f103c8.o
+                0x0800122a                USB_LP_CAN1_RX0_IRQHandler
  .text.CAN1_RX1_IRQHandler
-                0x08000e56        0x8 build/startup_stm32f103c8.o
-                0x08000e56                CAN1_RX1_IRQHandler
+                0x08001232        0x8 build/startup_stm32f103c8.o
+                0x08001232                CAN1_RX1_IRQHandler
  .text.CAN1_SCE_IRQHandler
-                0x08000e5e        0x8 build/startup_stm32f103c8.o
-                0x08000e5e                CAN1_SCE_IRQHandler
+                0x0800123a        0x8 build/startup_stm32f103c8.o
+                0x0800123a                CAN1_SCE_IRQHandler
  .text.EXTI9_5_IRQHandler
-                0x08000e66        0x8 build/startup_stm32f103c8.o
-                0x08000e66                EXTI9_5_IRQHandler
+                0x08001242        0x8 build/startup_stm32f103c8.o
+                0x08001242                EXTI9_5_IRQHandler
  .text.TIM1_BRK_IRQHandler
-                0x08000e6e        0x8 build/startup_stm32f103c8.o
-                0x08000e6e                TIM1_BRK_IRQHandler
+                0x0800124a        0x8 build/startup_stm32f103c8.o
+                0x0800124a                TIM1_BRK_IRQHandler
  .text.TIM1_UP_IRQHandler
-                0x08000e76        0x8 build/startup_stm32f103c8.o
-                0x08000e76                TIM1_UP_IRQHandler
+                0x08001252        0x8 build/startup_stm32f103c8.o
+                0x08001252                TIM1_UP_IRQHandler
  .text.TIM1_TRG_COM_IRQHandler
-                0x08000e7e        0x8 build/startup_stm32f103c8.o
-                0x08000e7e                TIM1_TRG_COM_IRQHandler
+                0x0800125a        0x8 build/startup_stm32f103c8.o
+                0x0800125a                TIM1_TRG_COM_IRQHandler
  .text.TIM1_CC_IRQHandler
-                0x08000e86        0x8 build/startup_stm32f103c8.o
-                0x08000e86                TIM1_CC_IRQHandler
+                0x08001262        0x8 build/startup_stm32f103c8.o
+                0x08001262                TIM1_CC_IRQHandler
  .text.TIM3_IRQHandler
-                0x08000e8e        0x8 build/startup_stm32f103c8.o
-                0x08000e8e                TIM3_IRQHandler
+                0x0800126a        0x8 build/startup_stm32f103c8.o
+                0x0800126a                TIM3_IRQHandler
  .text.TIM4_IRQHandler
-                0x08000e96        0x8 build/startup_stm32f103c8.o
-                0x08000e96                TIM4_IRQHandler
+                0x08001272        0x8 build/startup_stm32f103c8.o
+                0x08001272                TIM4_IRQHandler
  .text.I2C1_EV_IRQHandler
-                0x08000e9e        0x8 build/startup_stm32f103c8.o
-                0x08000e9e                I2C1_EV_IRQHandler
+                0x0800127a        0x8 build/startup_stm32f103c8.o
+                0x0800127a                I2C1_EV_IRQHandler
  .text.I2C1_ER_IRQHandler
-                0x08000ea6        0x8 build/startup_stm32f103c8.o
-                0x08000ea6                I2C1_ER_IRQHandler
+                0x08001282        0x8 build/startup_stm32f103c8.o
+                0x08001282                I2C1_ER_IRQHandler
  .text.I2C2_EV_IRQHandler
-                0x08000eae        0x8 build/startup_stm32f103c8.o
-                0x08000eae                I2C2_EV_IRQHandler
+                0x0800128a        0x8 build/startup_stm32f103c8.o
+                0x0800128a                I2C2_EV_IRQHandler
  .text.I2C2_ER_IRQHandler
-                0x08000eb6        0x8 build/startup_stm32f103c8.o
-                0x08000eb6                I2C2_ER_IRQHandler
+                0x08001292        0x8 build/startup_stm32f103c8.o
+                0x08001292                I2C2_ER_IRQHandler
  .text.SPI1_IRQHandler
-                0x08000ebe        0x8 build/startup_stm32f103c8.o
-                0x08000ebe                SPI1_IRQHandler
+                0x0800129a        0x8 build/startup_stm32f103c8.o
+                0x0800129a                SPI1_IRQHandler
  .text.SPI2_IRQHandler
-                0x08000ec6        0x8 build/startup_stm32f103c8.o
-                0x08000ec6                SPI2_IRQHandler
+                0x080012a2        0x8 build/startup_stm32f103c8.o
+                0x080012a2                SPI2_IRQHandler
  .text.USART1_IRQHandler
-                0x08000ece        0x8 build/startup_stm32f103c8.o
-                0x08000ece                USART1_IRQHandler
+                0x080012aa        0x8 build/startup_stm32f103c8.o
+                0x080012aa                USART1_IRQHandler
  .text.USART2_IRQHandler
-                0x08000ed6        0x8 build/startup_stm32f103c8.o
-                0x08000ed6                USART2_IRQHandler
+                0x080012b2        0x8 build/startup_stm32f103c8.o
+                0x080012b2                USART2_IRQHandler
  .text.USART3_IRQHandler
-                0x08000ede        0x8 build/startup_stm32f103c8.o
-                0x08000ede                USART3_IRQHandler
+                0x080012ba        0x8 build/startup_stm32f103c8.o
+                0x080012ba                USART3_IRQHandler
  .text.EXTI15_10_IRQHandler
-                0x08000ee6        0x8 build/startup_stm32f103c8.o
-                0x08000ee6                EXTI15_10_IRQHandler
+                0x080012c2        0x8 build/startup_stm32f103c8.o
+                0x080012c2                EXTI15_10_IRQHandler
  .text.RTC_Alarm_IRQHandler
-                0x08000eee        0x8 build/startup_stm32f103c8.o
-                0x08000eee                RTC_Alarm_IRQHandler
+                0x080012ca        0x8 build/startup_stm32f103c8.o
+                0x080012ca                RTC_Alarm_IRQHandler
  .text.USBWakeUp_IRQHandler
-                0x08000ef6        0x8 build/startup_stm32f103c8.o
-                0x08000ef6                USBWakeUp_IRQHandler
- *fill*         0x08000efe        0x2 
+                0x080012d2        0x8 build/startup_stm32f103c8.o
+                0x080012d2                USBWakeUp_IRQHandler
+ *fill*         0x080012da        0x2 
  .text.Reset_Handler
-                0x08000f00       0x64 build/startup_stm32f103c8.o
-                0x08000f00                Reset_Handler
+                0x080012dc       0x64 build/startup_stm32f103c8.o
+                0x080012dc                Reset_Handler
  .text.set_operation
-                0x08000f64       0x28 build/mpu9250.o
+                0x08001340       0x28 build/mpu9250.o
  .text.read_bytes
-                0x08000f8c       0x54 build/mpu9250.o
+                0x08001368       0x54 build/mpu9250.o
  .text.write_byte
-                0x08000fe0       0x58 build/mpu9250.o
+                0x080013bc       0x58 build/mpu9250.o
  .text.write_and_verify
-                0x08001038       0xf4 build/mpu9250.o
+                0x08001414       0xf4 build/mpu9250.o
  .text.decode_be
-                0x0800112c       0x28 build/mpu9250.o
+                0x08001508       0x28 build/mpu9250.o
  .text.mpu9250_init
-                0x08001154      0x238 build/mpu9250.o
-                0x08001154                mpu9250_init
+                0x08001530      0x238 build/mpu9250.o
+                0x08001530                mpu9250_init
  .text.mpu9250_enable_data_ready_interrupt
-                0x0800138c       0x16 build/mpu9250.o
-                0x0800138c                mpu9250_enable_data_ready_interrupt
- *fill*         0x080013a2        0x2 
+                0x08001768       0x16 build/mpu9250.o
+                0x08001768                mpu9250_enable_data_ready_interrupt
+ *fill*         0x0800177e        0x2 
  .text.mpu9250_read_motion_raw
-                0x080013a4       0xcc build/mpu9250.o
-                0x080013a4                mpu9250_read_motion_raw
+                0x08001780       0xcc build/mpu9250.o
+                0x08001780                mpu9250_read_motion_raw
  .text.mpu9250_read_mag_raw
-                0x08001470       0x14 build/mpu9250.o
-                0x08001470                mpu9250_read_mag_raw
+                0x0800184c       0x14 build/mpu9250.o
+                0x0800184c                mpu9250_read_mag_raw
  .text.mpu9250_who_am_i
-                0x08001484       0x14 build/mpu9250.o
-                0x08001484                mpu9250_who_am_i
+                0x08001860       0x14 build/mpu9250.o
+                0x08001860                mpu9250_who_am_i
  .text.ak8963_who_am_i
-                0x08001498       0x14 build/mpu9250.o
-                0x08001498                ak8963_who_am_i
+                0x08001874       0x14 build/mpu9250.o
+                0x08001874                ak8963_who_am_i
  .text.mpu9250_has_magnetometer
-                0x080014ac       0x20 build/mpu9250.o
-                0x080014ac                mpu9250_has_magnetometer
- .text.mpu9250_get_init_diag
-                0x080014cc       0x28 build/mpu9250.o
-                0x080014cc                mpu9250_get_init_diag
+                0x08001888       0x20 build/mpu9250.o
+                0x08001888                mpu9250_has_magnetometer
  .text.enter_critical
-                0x080014f4       0x1a build/i2c1.o
+                0x080018a8       0x1a build/i2c1.o
  .text.exit_critical
-                0x0800150e       0x1e build/i2c1.o
+                0x080018c2       0x1e build/i2c1.o
  .text.short_delay
-                0x0800152c       0x26 build/i2c1.o
- *fill*         0x08001552        0x2 
+                0x080018e0       0x26 build/i2c1.o
+ *fill*         0x08001906        0x2 
  .text.set_stage
-                0x08001554       0x20 build/i2c1.o
+                0x08001908       0x20 build/i2c1.o
  .text.snapshot_registers
-                0x08001574       0x84 build/i2c1.o
+                0x08001928       0x84 build/i2c1.o
  .text.count_failure
-                0x080015f8       0x98 build/i2c1.o
+                0x080019ac       0x98 build/i2c1.o
  .text.status_from_sr1
-                0x08001690       0x4c build/i2c1.o
+                0x08001a44       0x4c build/i2c1.o
  .text.clear_error_flags
-                0x080016dc       0x28 build/i2c1.o
+                0x08001a90       0x28 build/i2c1.o
  .text.wait_sr1
-                0x08001704       0x88 build/i2c1.o
+                0x08001ab8       0x88 build/i2c1.o
  .text.wait_bus_idle_raw
-                0x0800178c       0xb8 build/i2c1.o
+                0x08001b40       0xb8 build/i2c1.o
  .text.wait_stop_complete
-                0x08001844       0x60 build/i2c1.o
+                0x08001bf8       0x60 build/i2c1.o
  .text.clear_addr
-                0x080018a4       0x2c build/i2c1.o
+                0x08001c58       0x2c build/i2c1.o
  .text.gpio_configure_af_open_drain
-                0x080018d0       0x4c build/i2c1.o
+                0x08001c84       0x4c build/i2c1.o
  .text.gpio_configure_bus_clear
-                0x0800191c       0x4c build/i2c1.o
+                0x08001cd0       0x4c build/i2c1.o
  .text.wait_line_high
-                0x08001968       0x40 build/i2c1.o
+                0x08001d1c       0x40 build/i2c1.o
  .text.gpio_bus_clear
-                0x080019a8      0x120 build/i2c1.o
+                0x08001d5c      0x120 build/i2c1.o
  .text.calculate_timing
-                0x08001ac8      0x12c build/i2c1.o
+                0x08001e7c      0x12c build/i2c1.o
  .text.configure_peripheral
-                0x08001bf4       0xd8 build/i2c1.o
+                0x08001fa8       0xd8 build/i2c1.o
  .text.request_stop_if_master
-                0x08001ccc       0x4c build/i2c1.o
+                0x08002080       0x4c build/i2c1.o
  .text.recover_internal
-                0x08001d18       0xf0 build/i2c1.o
+                0x080020cc       0xf0 build/i2c1.o
  .text.start_address
-                0x08001e08       0x7c build/i2c1.o
+                0x080021bc       0x7c build/i2c1.o
  .text.write_register_once
-                0x08001e84       0xc4 build/i2c1.o
+                0x08002238       0xc4 build/i2c1.o
  .text.read_registers_once
-                0x08001f48      0x2a0 build/i2c1.o
+                0x080022fc      0x2a0 build/i2c1.o
  .text.recover_and_retry
-                0x080021e8       0x3c build/i2c1.o
+                0x0800259c       0x3c build/i2c1.o
  .text.i2c1_init
-                0x08002224       0xdc build/i2c1.o
-                0x08002224                i2c1_init
+                0x080025d8       0xdc build/i2c1.o
+                0x080025d8                i2c1_init
  .text.i2c1_write_register
-                0x08002300       0xf4 build/i2c1.o
-                0x08002300                i2c1_write_register
+                0x080026b4       0xf4 build/i2c1.o
+                0x080026b4                i2c1_write_register
  .text.i2c1_read_registers
-                0x080023f4      0x108 build/i2c1.o
-                0x080023f4                i2c1_read_registers
- .text.i2c1_get_diag
-                0x080024fc      0x13c build/i2c1.o
-                0x080024fc                i2c1_get_diag
+                0x080027a8      0x108 build/i2c1.o
+                0x080027a8                i2c1_read_registers
  .text.enter_critical
-                0x08002638       0x1a build/micros.o
+                0x080028b0       0x1a build/micros.o
  .text.exit_critical
-                0x08002652       0x1e build/micros.o
+                0x080028ca       0x1e build/micros.o
  .text.micros_init
-                0x08002670       0xf8 build/micros.o
-                0x08002670                micros_init
- .text.micros   0x08002768       0x5c build/micros.o
-                0x08002768                micros
+                0x080028e8       0xf8 build/micros.o
+                0x080028e8                micros_init
+ .text.micros   0x080029e0       0x5c build/micros.o
+                0x080029e0                micros
  .text.delay_ms
-                0x080027c4       0x3a build/micros.o
-                0x080027c4                delay_ms
- *fill*         0x080027fe        0x2 
+                0x08002a3c       0x3a build/micros.o
+                0x08002a3c                delay_ms
+ *fill*         0x08002a76        0x2 
  .text.TIM2_IRQHandler
-                0x08002800       0x38 build/micros.o
-                0x08002800                TIM2_IRQHandler
+                0x08002a78       0x38 build/micros.o
+                0x08002a78                TIM2_IRQHandler
  .text.wait_for_register_value
-                0x08002838       0x54 build/system_clock.o
+                0x08002ab0       0x54 build/system_clock.o
  .text.record_reset_hsi_clock_tree
-                0x0800288c       0x48 build/system_clock.o
+                0x08002b04       0x48 build/system_clock.o
  .text.fallback_to_hsi
-                0x080028d4       0xc8 build/system_clock.o
+                0x08002b4c       0xc8 build/system_clock.o
  .text.system_clock_init
-                0x0800299c      0x118 build/system_clock.o
-                0x0800299c                system_clock_init
+                0x08002c14      0x118 build/system_clock.o
+                0x08002c14                system_clock_init
  .text.system_clock_get_hclk_hz
-                0x08002ab4       0x14 build/system_clock.o
-                0x08002ab4                system_clock_get_hclk_hz
+                0x08002d2c       0x14 build/system_clock.o
+                0x08002d2c                system_clock_get_hclk_hz
  .text.system_clock_get_pclk1_hz
-                0x08002ac8       0x14 build/system_clock.o
-                0x08002ac8                system_clock_get_pclk1_hz
+                0x08002d40       0x14 build/system_clock.o
+                0x08002d40                system_clock_get_pclk1_hz
  .text.system_clock_get_pclk2_hz
-                0x08002adc       0x14 build/system_clock.o
-                0x08002adc                system_clock_get_pclk2_hz
+                0x08002d54       0x14 build/system_clock.o
+                0x08002d54                system_clock_get_pclk2_hz
  .text.system_time_init
-                0x08002af0       0xb4 build/system_time.o
-                0x08002af0                system_time_init
+                0x08002d68       0xb4 build/system_time.o
+                0x08002d68                system_time_init
  .text.SysTick_Handler
-                0x08002ba4       0x1c build/system_time.o
-                0x08002ba4                SysTick_Handler
+                0x08002e1c       0x1c build/system_time.o
+                0x08002e1c                SysTick_Handler
  .text.uart_diag_wait_for_txe
-                0x08002bc0       0x50 build/uart_diag.o
+                0x08002e38       0x50 build/uart_diag.o
  .text.uart_diag_init
-                0x08002c10      0x108 build/uart_diag.o
-                0x08002c10                uart_diag_init
+                0x08002e88      0x108 build/uart_diag.o
+                0x08002e88                uart_diag_init
  .text.uart_diag_write_char
-                0x08002d18       0x44 build/uart_diag.o
-                0x08002d18                uart_diag_write_char
+                0x08002f90       0x44 build/uart_diag.o
+                0x08002f90                uart_diag_write_char
  .text.uart_diag_write_string
-                0x08002d5c       0x44 build/uart_diag.o
-                0x08002d5c                uart_diag_write_string
+                0x08002fd4       0x44 build/uart_diag.o
+                0x08002fd4                uart_diag_write_string
  .text.uart_diag_write_line
-                0x08002da0       0x34 build/uart_diag.o
-                0x08002da0                uart_diag_write_line
+                0x08003018       0x34 build/uart_diag.o
+                0x08003018                uart_diag_write_line
  .text.uart_diag_write_uint32
-                0x08002dd4       0x98 build/uart_diag.o
-                0x08002dd4                uart_diag_write_uint32
+                0x0800304c       0x98 build/uart_diag.o
+                0x0800304c                uart_diag_write_uint32
  .text.uart_diag_write_hex32
-                0x08002e6c       0x6c build/uart_diag.o
-                0x08002e6c                uart_diag_write_hex32
+                0x080030e4       0x6c build/uart_diag.o
+                0x080030e4                uart_diag_write_hex32
+ .text.median3  0x08003150       0x60 build/accel_pipeline.o
+ .text.biquad_process
+                0x080031b0       0xe4 build/accel_pipeline.o
+ .text.raw_is_saturated
+                0x08003294       0x70 build/accel_pipeline.o
+ .text.accel_pipeline_init
+                0x08003304       0x20 build/accel_pipeline.o
+                0x08003304                accel_pipeline_init
+ .text.accel_pipeline_process
+                0x08003324      0x2f4 build/accel_pipeline.o
+                0x08003324                accel_pipeline_process
  *(.rodata)
- .rodata        0x08002ed8      0x414 build/main.o
- .rodata        0x080032ec        0x7 build/uart_diag.o
+ .rodata        0x08003618      0x18c build/main.o
+ .rodata        0x080037a4        0x7 build/uart_diag.o
  *(.rodata*)
- *fill*         0x080032f3        0x1 
+ *fill*         0x080037ab        0x1 
  .rodata.hex_digits.0
-                0x080032f4       0x11 build/uart_diag.o
-                0x08003308                        . = ALIGN (0x4)
- *fill*         0x08003305        0x3 
-                0x08003308                        _etext = .
-                0x08003308                        _sidata = LOADADDR (.data)
+                0x080037ac       0x11 build/uart_diag.o
+                0x080037c0                        . = ALIGN (0x4)
+ *fill*         0x080037bd        0x3 
+                0x080037c0                        _etext = .
+                0x080037c0                        _sidata = LOADADDR (.data)
 
-.glue_7         0x08003308        0x0
- .glue_7        0x08003308        0x0 linker stubs
+.glue_7         0x080037c0        0x0
+ .glue_7        0x080037c0        0x0 linker stubs
 
-.glue_7t        0x08003308        0x0
- .glue_7t       0x08003308        0x0 linker stubs
+.glue_7t        0x080037c0        0x0
+ .glue_7t       0x080037c0        0x0 linker stubs
 
-.vfp11_veneer   0x08003308        0x0
- .vfp11_veneer  0x08003308        0x0 linker stubs
+.vfp11_veneer   0x080037c0        0x0
+ .vfp11_veneer  0x080037c0        0x0 linker stubs
 
-.v4_bx          0x08003308        0x0
- .v4_bx         0x08003308        0x0 linker stubs
+.v4_bx          0x080037c0        0x0
+ .v4_bx         0x080037c0        0x0 linker stubs
 
-.iplt           0x08003308        0x0
- .iplt          0x08003308        0x0 build/main.o
+.iplt           0x080037c0        0x0
+ .iplt          0x080037c0        0x0 build/main.o
 
-.rel.dyn        0x08003308        0x0
- .rel.iplt      0x08003308        0x0 build/main.o
+.rel.dyn        0x080037c0        0x0
+ .rel.iplt      0x080037c0        0x0 build/main.o
 
-.data           0x20000000       0x18 load address 0x08003308
+.data           0x20000000       0x18 load address 0x080037c0
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _sdata = .
  *(.data)
@@ -574,88 +670,90 @@ LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a
                 0x20000018                        . = ALIGN (0x4)
                 0x20000018                        _edata = .
 
-.igot.plt       0x20000018        0x0 load address 0x08003320
+.igot.plt       0x20000018        0x0 load address 0x080037d8
  .igot.plt      0x20000018        0x0 build/main.o
 
-.bss            0x20000018     0x3eac load address 0x08003320
+.bss            0x20000018      0x220 load address 0x080037d8
                 0x20000018                        . = ALIGN (0x4)
                 0x20000018                        _sbss = .
  *(.bss)
  *(.bss*)
- .bss.init_diag
-                0x20000018       0x14 build/main.o
-                0x20000018                init_diag
- .bss.i2c_diag  0x2000002c       0x60 build/main.o
-                0x2000002c                i2c_diag
  .bss.g_fc_clock_status
-                0x2000008c        0x1 build/main.o
-                0x2000008c                g_fc_clock_status
+                0x20000018        0x1 build/main.o
+                0x20000018                g_fc_clock_status
  .bss.g_fc_time_status
-                0x2000008d        0x1 build/main.o
-                0x2000008d                g_fc_time_status
+                0x20000019        0x1 build/main.o
+                0x20000019                g_fc_time_status
  .bss.g_fc_micros_status
-                0x2000008e        0x1 build/main.o
-                0x2000008e                g_fc_micros_status
+                0x2000001a        0x1 build/main.o
+                0x2000001a                g_fc_micros_status
  .bss.g_fc_uart_status
-                0x2000008f        0x1 build/main.o
-                0x2000008f                g_fc_uart_status
+                0x2000001b        0x1 build/main.o
+                0x2000001b                g_fc_uart_status
  .bss.g_imu_acquisition_status
-                0x20000090        0x1 build/main.o
-                0x20000090                g_imu_acquisition_status
- *fill*         0x20000091        0x3 
- .bss.accel_capture_buffer
-                0x20000094     0x3cf0 build/main.o
- .bss.accel_capture_count
-                0x20003d84        0x4 build/main.o
+                0x2000001c        0x1 build/main.o
+                0x2000001c                g_imu_acquisition_status
+ *fill*         0x2000001d        0x3 
+ .bss.g_latest_raw_imu_sample
+                0x20000020       0x24 build/main.o
+                0x20000020                g_latest_raw_imu_sample
+ .bss.g_imu_acquisition_stats
+                0x20000044       0x24 build/main.o
+                0x20000044                g_imu_acquisition_stats
+ .bss.g_latest_accel_pipeline_output
+                0x20000068       0x3c build/main.o
+                0x20000068                g_latest_accel_pipeline_output
  .bss.pending_events
-                0x20003d88        0x4 build/imu_acquisition.o
+                0x200000a4        0x4 build/imu_acquisition.o
  .bss.last_irq_timestamp_us
-                0x20003d8c        0x4 build/imu_acquisition.o
+                0x200000a8        0x4 build/imu_acquisition.o
  .bss.total_interrupts
-                0x20003d90        0x4 build/imu_acquisition.o
+                0x200000ac        0x4 build/imu_acquisition.o
  .bss.latest_sample
-                0x20003d94       0x24 build/imu_acquisition.o
+                0x200000b0       0x24 build/imu_acquisition.o
  .bss.latest_available
-                0x20003db8        0x1 build/imu_acquisition.o
- *fill*         0x20003db9        0x3 
- .bss.stats     0x20003dbc       0x24 build/imu_acquisition.o
+                0x200000d4        0x1 build/imu_acquisition.o
+ *fill*         0x200000d5        0x3 
+ .bss.stats     0x200000d8       0x24 build/imu_acquisition.o
  .bss.last_driver_status
-                0x20003de0        0x1 build/imu_acquisition.o
- *fill*         0x20003de1        0x3 
+                0x200000fc        0x1 build/imu_acquisition.o
+ *fill*         0x200000fd        0x3 
  .bss.g_fault_record
-                0x20003de4       0x4c build/flight_fault_handlers.o
-                0x20003de4                g_fault_record
- .bss.mpu_id    0x20003e30        0x1 build/mpu9250.o
- .bss.mag_id    0x20003e31        0x1 build/mpu9250.o
+                0x20000100       0x4c build/flight_fault_handlers.o
+                0x20000100                g_fault_record
+ .bss.mpu_id    0x2000014c        0x1 build/mpu9250.o
+ .bss.mag_id    0x2000014d        0x1 build/mpu9250.o
  .bss.detected_device
-                0x20003e32        0x1 build/mpu9250.o
- *fill*         0x20003e33        0x1 
+                0x2000014e        0x1 build/mpu9250.o
+ *fill*         0x2000014f        0x1 
  .bss.mag_adjustment
-                0x20003e34        0x3 build/mpu9250.o
- *fill*         0x20003e37        0x1 
+                0x20000150        0x3 build/mpu9250.o
+ *fill*         0x20000153        0x1 
  .bss.init_diag
-                0x20003e38       0x14 build/mpu9250.o
+                0x20000154       0x14 build/mpu9250.o
  .bss.g_i2c1_diag
-                0x20003e4c       0x60 build/i2c1.o
-                0x20003e4c                g_i2c1_diag
+                0x20000168       0x60 build/i2c1.o
+                0x20000168                g_i2c1_diag
  .bss.configured_pclk1_hz
-                0x20003eac        0x4 build/i2c1.o
+                0x200001c8        0x4 build/i2c1.o
  .bss.configured_bus_hz
-                0x20003eb0        0x4 build/i2c1.o
+                0x200001cc        0x4 build/i2c1.o
  .bss.configuration_valid
-                0x20003eb4        0x1 build/i2c1.o
- *fill*         0x20003eb5        0x3 
+                0x200001d0        0x1 build/i2c1.o
+ *fill*         0x200001d1        0x3 
  .bss.tim2_overflow_base_us
-                0x20003eb8        0x4 build/micros.o
+                0x200001d4        0x4 build/micros.o
  .bss.g_milliseconds
-                0x20003ebc        0x4 build/system_time.o
-                0x20003ebc                g_milliseconds
+                0x200001d8        0x4 build/system_time.o
+                0x200001d8                g_milliseconds
  .bss.uart_diag_ready
-                0x20003ec0        0x1 build/uart_diag.o
+                0x200001dc        0x1 build/uart_diag.o
+ *fill*         0x200001dd        0x3 
+ .bss.pipeline_state
+                0x200001e0       0x58 build/accel_pipeline.o
  *(COMMON)
-                0x20003ec4                        . = ALIGN (0x4)
- *fill*         0x20003ec1        0x3 
-                0x20003ec4                        _ebss = .
+                0x20000238                        . = ALIGN (0x4)
+                0x20000238                        _ebss = .
 
 /DISCARD/
  *(.comment)
@@ -689,137 +787,198 @@ LOAD linker stubs
                 0x00000195       0x2d build/system_time.o
  .ARM.attributes
                 0x000001c2       0x2d build/uart_diag.o
+ .ARM.attributes
+                0x000001ef       0x2d build/accel_pipeline.o
+ .ARM.attributes
+                0x0000021c       0x1d /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .ARM.attributes
+                0x00000239       0x1d /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .ARM.attributes
+                0x00000256       0x1d /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .ARM.attributes
+                0x00000273       0x1d /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
 
-.debug_info     0x00000000     0x32e8
- .debug_info    0x00000000      0xb2d build/main.o
- .debug_info    0x00000b2d      0x5f7 build/imu_acquisition.o
- .debug_info    0x00001124      0x25c build/flight_fault_handlers.o
- .debug_info    0x00001380       0xc5 build/freestanding_mem.o
- .debug_info    0x00001445      0x464 build/startup_stm32f103c8.o
- .debug_info    0x000018a9      0x728 build/mpu9250.o
- .debug_info    0x00001fd1      0xacb build/i2c1.o
- .debug_info    0x00002a9c      0x1ef build/micros.o
- .debug_info    0x00002c8b      0x298 build/system_clock.o
- .debug_info    0x00002f23      0x138 build/system_time.o
- .debug_info    0x0000305b      0x28d build/uart_diag.o
+.debug_info     0x00000000     0x370c
+ .debug_info    0x00000000      0x903 build/main.o
+ .debug_info    0x00000903      0x5f7 build/imu_acquisition.o
+ .debug_info    0x00000efa      0x25c build/flight_fault_handlers.o
+ .debug_info    0x00001156       0xc5 build/freestanding_mem.o
+ .debug_info    0x0000121b      0x464 build/startup_stm32f103c8.o
+ .debug_info    0x0000167f      0x728 build/mpu9250.o
+ .debug_info    0x00001da7      0xacb build/i2c1.o
+ .debug_info    0x00002872      0x1ef build/micros.o
+ .debug_info    0x00002a61      0x298 build/system_clock.o
+ .debug_info    0x00002cf9      0x138 build/system_time.o
+ .debug_info    0x00002e31      0x28d build/uart_diag.o
+ .debug_info    0x000030be      0x416 build/accel_pipeline.o
+ .debug_info    0x000034d4       0xca /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .debug_info    0x0000359e       0x57 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .debug_info    0x000035f5       0xdb /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .debug_info    0x000036d0       0x3c /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
 
-.debug_abbrev   0x00000000      0xf8a
- .debug_abbrev  0x00000000      0x1da build/main.o
- .debug_abbrev  0x000001da      0x1f0 build/imu_acquisition.o
- .debug_abbrev  0x000003ca      0x124 build/flight_fault_handlers.o
- .debug_abbrev  0x000004ee       0x94 build/freestanding_mem.o
- .debug_abbrev  0x00000582       0xfc build/startup_stm32f103c8.o
- .debug_abbrev  0x0000067e      0x205 build/mpu9250.o
- .debug_abbrev  0x00000883      0x295 build/i2c1.o
- .debug_abbrev  0x00000b18      0x12b build/micros.o
- .debug_abbrev  0x00000c43      0x14f build/system_clock.o
- .debug_abbrev  0x00000d92       0xe4 build/system_time.o
- .debug_abbrev  0x00000e76      0x114 build/uart_diag.o
+.debug_abbrev   0x00000000     0x1191
+ .debug_abbrev  0x00000000      0x1f4 build/main.o
+ .debug_abbrev  0x000001f4      0x1f0 build/imu_acquisition.o
+ .debug_abbrev  0x000003e4      0x124 build/flight_fault_handlers.o
+ .debug_abbrev  0x00000508       0x94 build/freestanding_mem.o
+ .debug_abbrev  0x0000059c       0xfc build/startup_stm32f103c8.o
+ .debug_abbrev  0x00000698      0x205 build/mpu9250.o
+ .debug_abbrev  0x0000089d      0x295 build/i2c1.o
+ .debug_abbrev  0x00000b32      0x12b build/micros.o
+ .debug_abbrev  0x00000c5d      0x14f build/system_clock.o
+ .debug_abbrev  0x00000dac       0xe4 build/system_time.o
+ .debug_abbrev  0x00000e90      0x114 build/uart_diag.o
+ .debug_abbrev  0x00000fa4      0x14d build/accel_pipeline.o
+ .debug_abbrev  0x000010f1       0x28 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .debug_abbrev  0x00001119       0x28 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .debug_abbrev  0x00001141       0x28 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .debug_abbrev  0x00001169       0x28 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
 
-.debug_aranges  0x00000000      0x570
+.debug_aranges  0x00000000      0x640
  .debug_aranges
-                0x00000000       0x40 build/main.o
+                0x00000000       0x50 build/main.o
  .debug_aranges
-                0x00000040       0x68 build/imu_acquisition.o
+                0x00000050       0x68 build/imu_acquisition.o
  .debug_aranges
-                0x000000a8       0x40 build/flight_fault_handlers.o
+                0x000000b8       0x40 build/flight_fault_handlers.o
  .debug_aranges
-                0x000000e8       0x20 build/freestanding_mem.o
+                0x000000f8       0x20 build/freestanding_mem.o
  .debug_aranges
-                0x00000108      0x1b0 build/startup_stm32f103c8.o
+                0x00000118      0x1b0 build/startup_stm32f103c8.o
  .debug_aranges
-                0x000002b8       0x90 build/mpu9250.o
+                0x000002c8       0x90 build/mpu9250.o
  .debug_aranges
-                0x00000348      0x100 build/i2c1.o
+                0x00000358      0x100 build/i2c1.o
  .debug_aranges
-                0x00000448       0x48 build/micros.o
+                0x00000458       0x48 build/micros.o
  .debug_aranges
-                0x00000490       0x60 build/system_clock.o
+                0x000004a0       0x60 build/system_clock.o
  .debug_aranges
-                0x000004f0       0x30 build/system_time.o
+                0x00000500       0x30 build/system_time.o
  .debug_aranges
-                0x00000520       0x50 build/uart_diag.o
+                0x00000530       0x50 build/uart_diag.o
+ .debug_aranges
+                0x00000580       0x40 build/accel_pipeline.o
+ .debug_aranges
+                0x000005c0       0x20 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .debug_aranges
+                0x000005e0       0x20 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .debug_aranges
+                0x00000600       0x20 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .debug_aranges
+                0x00000620       0x20 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
 
 .debug_rnglists
-                0x00000000      0x3fa
+                0x00000000      0x433
  .debug_rnglists
-                0x00000000       0x2e build/main.o
+                0x00000000       0x3a build/main.o
  .debug_rnglists
-                0x0000002e       0x4c build/imu_acquisition.o
+                0x0000003a       0x4c build/imu_acquisition.o
  .debug_rnglists
-                0x0000007a       0x2b build/flight_fault_handlers.o
+                0x00000086       0x2b build/flight_fault_handlers.o
  .debug_rnglists
-                0x000000a5       0x13 build/freestanding_mem.o
+                0x000000b1       0x13 build/freestanding_mem.o
  .debug_rnglists
-                0x000000b8      0x13f build/startup_stm32f103c8.o
+                0x000000c4      0x13f build/startup_stm32f103c8.o
  .debug_rnglists
-                0x000001f7       0x6a build/mpu9250.o
+                0x00000203       0x6a build/mpu9250.o
  .debug_rnglists
-                0x00000261       0xc9 build/i2c1.o
+                0x0000026d       0xc9 build/i2c1.o
  .debug_rnglists
-                0x0000032a       0x32 build/micros.o
+                0x00000336       0x32 build/micros.o
  .debug_rnglists
-                0x0000035c       0x45 build/system_clock.o
+                0x00000368       0x45 build/system_clock.o
  .debug_rnglists
-                0x000003a1       0x20 build/system_time.o
+                0x000003ad       0x20 build/system_time.o
  .debug_rnglists
-                0x000003c1       0x39 build/uart_diag.o
+                0x000003cd       0x39 build/uart_diag.o
+ .debug_rnglists
+                0x00000406       0x2d build/accel_pipeline.o
 
-.debug_macro    0x00000000     0x180d
- .debug_macro   0x00000000       0xaa build/main.o
- .debug_macro   0x000000aa      0xaea build/main.o
- .debug_macro   0x00000b94      0x34e build/main.o
- .debug_macro   0x00000ee2       0x22 build/main.o
- .debug_macro   0x00000f04       0x10 build/main.o
- .debug_macro   0x00000f14       0x16 build/main.o
- .debug_macro   0x00000f2a      0x190 build/main.o
- .debug_macro   0x000010ba       0xdc build/imu_acquisition.o
- .debug_macro   0x00001196       0x2a build/flight_fault_handlers.o
- .debug_macro   0x000011c0       0x1a build/freestanding_mem.o
- .debug_macro   0x000011da       0x30 build/startup_stm32f103c8.o
- .debug_macro   0x0000120a      0x143 build/mpu9250.o
- .debug_macro   0x0000134d      0x16c build/i2c1.o
- .debug_macro   0x000014b9       0xb4 build/micros.o
- .debug_macro   0x0000156d      0x11d build/system_clock.o
- .debug_macro   0x0000168a       0x96 build/system_time.o
- .debug_macro   0x00001720       0xed build/uart_diag.o
+.debug_macro    0x00000000     0x18fe
+ .debug_macro   0x00000000       0xb3 build/main.o
+ .debug_macro   0x000000b3      0xb1a build/main.o
+ .debug_macro   0x00000bcd      0x34e build/main.o
+ .debug_macro   0x00000f1b       0x22 build/main.o
+ .debug_macro   0x00000f3d       0x22 build/main.o
+ .debug_macro   0x00000f5f       0x16 build/main.o
+ .debug_macro   0x00000f75       0x16 build/main.o
+ .debug_macro   0x00000f8b      0x190 build/main.o
+ .debug_macro   0x0000111b       0xdc build/imu_acquisition.o
+ .debug_macro   0x000011f7       0x10 build/imu_acquisition.o
+ .debug_macro   0x00001207       0x2a build/flight_fault_handlers.o
+ .debug_macro   0x00001231       0x1a build/freestanding_mem.o
+ .debug_macro   0x0000124b       0x30 build/startup_stm32f103c8.o
+ .debug_macro   0x0000127b      0x143 build/mpu9250.o
+ .debug_macro   0x000013be      0x16c build/i2c1.o
+ .debug_macro   0x0000152a       0xb4 build/micros.o
+ .debug_macro   0x000015de      0x11d build/system_clock.o
+ .debug_macro   0x000016fb       0x96 build/system_time.o
+ .debug_macro   0x00001791       0xed build/uart_diag.o
+ .debug_macro   0x0000187e       0x80 build/accel_pipeline.o
 
-.debug_line     0x00000000     0x26c8
- .debug_line    0x00000000      0x442 build/main.o
- .debug_line    0x00000442      0x3d7 build/imu_acquisition.o
- .debug_line    0x00000819      0x144 build/flight_fault_handlers.o
- .debug_line    0x0000095d       0x97 build/freestanding_mem.o
- .debug_line    0x000009f4      0x481 build/startup_stm32f103c8.o
- .debug_line    0x00000e75      0x429 build/mpu9250.o
- .debug_line    0x0000129e      0xb02 build/i2c1.o
- .debug_line    0x00001da0      0x218 build/micros.o
- .debug_line    0x00001fb8      0x2bd build/system_clock.o
- .debug_line    0x00002275      0x154 build/system_time.o
- .debug_line    0x000023c9      0x2ff build/uart_diag.o
+.debug_line     0x00000000     0x2c92
+ .debug_line    0x00000000      0x3f5 build/main.o
+ .debug_line    0x000003f5      0x3d7 build/imu_acquisition.o
+ .debug_line    0x000007cc      0x144 build/flight_fault_handlers.o
+ .debug_line    0x00000910       0x97 build/freestanding_mem.o
+ .debug_line    0x000009a7      0x481 build/startup_stm32f103c8.o
+ .debug_line    0x00000e28      0x429 build/mpu9250.o
+ .debug_line    0x00001251      0xb02 build/i2c1.o
+ .debug_line    0x00001d53      0x218 build/micros.o
+ .debug_line    0x00001f6b      0x2bd build/system_clock.o
+ .debug_line    0x00002228      0x154 build/system_time.o
+ .debug_line    0x0000237c      0x2ff build/uart_diag.o
+ .debug_line    0x0000267b      0x2f5 build/accel_pipeline.o
+ .debug_line    0x00002970      0x103 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .debug_line    0x00002a73      0x123 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .debug_line    0x00002b96       0x9a /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .debug_line    0x00002c30       0x62 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
 
-.debug_str      0x00000000     0x736e
- .debug_str     0x00000000     0x736e build/main.o
-                               0x4dc5 (size before relaxing)
- .debug_str     0x0000736e     0x46ad build/imu_acquisition.o
- .debug_str     0x0000736e     0x3ae9 build/flight_fault_handlers.o
- .debug_str     0x0000736e     0x3291 build/freestanding_mem.o
- .debug_str     0x0000736e     0x3e96 build/startup_stm32f103c8.o
- .debug_str     0x0000736e     0x4846 build/mpu9250.o
- .debug_str     0x0000736e     0x4a43 build/i2c1.o
- .debug_str     0x0000736e     0x3d63 build/micros.o
- .debug_str     0x0000736e     0x4105 build/system_clock.o
- .debug_str     0x0000736e     0x3d3d build/system_time.o
- .debug_str     0x0000736e     0x4023 build/uart_diag.o
+.debug_str      0x00000000     0x7c2d
+ .debug_str     0x00000000     0x7c2d build/main.o
+                               0x4ba4 (size before relaxing)
+ .debug_str     0x00007c2d     0x479b build/imu_acquisition.o
+ .debug_str     0x00007c2d     0x3bd7 build/flight_fault_handlers.o
+ .debug_str     0x00007c2d     0x337f build/freestanding_mem.o
+ .debug_str     0x00007c2d     0x3f84 build/startup_stm32f103c8.o
+ .debug_str     0x00007c2d     0x4934 build/mpu9250.o
+ .debug_str     0x00007c2d     0x4b31 build/i2c1.o
+ .debug_str     0x00007c2d     0x3e51 build/micros.o
+ .debug_str     0x00007c2d     0x41f3 build/system_clock.o
+ .debug_str     0x00007c2d     0x3e2b build/system_time.o
+ .debug_str     0x00007c2d     0x4111 build/uart_diag.o
+ .debug_str     0x00007c2d     0x3f1d build/accel_pipeline.o
+ .debug_str     0x00007c2d      0x144 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .debug_str     0x00007c2d       0xd0 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .debug_str     0x00007c2d      0x159 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .debug_str     0x00007c2d       0xbb /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
 
-.debug_frame    0x00000000     0x1300
- .debug_frame   0x00000000       0xbc build/main.o
- .debug_frame   0x000000bc      0x17c build/imu_acquisition.o
- .debug_frame   0x00000238       0xa4 build/flight_fault_handlers.o
- .debug_frame   0x000002dc       0x38 build/freestanding_mem.o
- .debug_frame   0x00000314      0x5a8 build/startup_stm32f103c8.o
- .debug_frame   0x000008bc      0x234 build/mpu9250.o
- .debug_frame   0x00000af0      0x458 build/i2c1.o
- .debug_frame   0x00000f48       0xf0 build/micros.o
- .debug_frame   0x00001038      0x140 build/system_clock.o
- .debug_frame   0x00001178       0x78 build/system_time.o
- .debug_frame   0x000011f0      0x110 build/uart_diag.o
+.debug_frame    0x00000000     0x1590
+ .debug_frame   0x00000000      0x108 build/main.o
+ .debug_frame   0x00000108      0x17c build/imu_acquisition.o
+ .debug_frame   0x00000284       0xa4 build/flight_fault_handlers.o
+ .debug_frame   0x00000328       0x38 build/freestanding_mem.o
+ .debug_frame   0x00000360      0x5a8 build/startup_stm32f103c8.o
+ .debug_frame   0x00000908      0x234 build/mpu9250.o
+ .debug_frame   0x00000b3c      0x458 build/i2c1.o
+ .debug_frame   0x00000f94       0xf0 build/micros.o
+ .debug_frame   0x00001084      0x140 build/system_clock.o
+ .debug_frame   0x000011c4       0x78 build/system_time.o
+ .debug_frame   0x0000123c      0x110 build/uart_diag.o
+ .debug_frame   0x0000134c       0xd4 build/accel_pipeline.o
+ .debug_frame   0x00001420       0x4c /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .debug_frame   0x0000146c       0x38 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .debug_frame   0x000014a4       0xc8 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .debug_frame   0x0000156c       0x24 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
+
+.debug_line_str
+                0x00000000       0x98
+ .debug_line_str
+                0x00000000       0x98 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_addsubsf3.o)
+ .debug_line_str
+                0x00000098       0x98 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_muldivsf3.o)
+ .debug_line_str
+                0x00000098       0x98 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_cmpsf2.o)
+ .debug_line_str
+                0x00000098       0x98 /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a(_arm_fixsfsi.o)
