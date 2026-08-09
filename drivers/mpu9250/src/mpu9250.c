@@ -45,6 +45,17 @@
 #define AK_ST1_DRDY             0x01U
 #define AK_ST2_HOFL             0x08U
 
+/*
+ * I2C1 already performs bounded low-level transaction retries. These MPU
+ * retries operate one level higher: they repeat a complete write/readback
+ * configuration operation or wait for the device to become ready after reset.
+ */
+#define MPU_REGISTER_VERIFY_ATTEMPTS 2UL
+#define MPU_ID_READ_ATTEMPTS         10UL
+#define MPU_RESET_SETTLE_MS          100UL
+#define MPU_ID_RETRY_DELAY_MS        5UL
+#define MPU_CONFIG_RETRY_DELAY_MS    1UL
+
 #if IMU_MODEL == IMU_MODEL_MPU6500
 
 #define SELECTED_EXPECTED_ID MPU6500_EXPECTED_ID
@@ -68,7 +79,16 @@ static mpu_device_t detected_device =
 
 static ak8963_factory_adjustment_t
     mag_adjustment;
+
 static mpu_init_diag_t init_diag;
+
+static void set_operation(mpu_init_stage_t stage,
+                          uint32_t attempt)
+{
+    init_diag.stage = stage;
+    init_diag.attempt = attempt;
+}
+
 static mpu9250_status_t read_bytes(
     uint8_t device,
     uint8_t reg,
@@ -77,21 +97,15 @@ static mpu9250_status_t read_bytes(
 {
     i2c1_status_t bus_status;
 
-    init_diag.phase =
-        MPU_DIAG_PHASE_READ;
+    init_diag.phase = MPU_DIAG_PHASE_READ;
+    init_diag.device_address = device;
+    init_diag.register_address = reg;
 
-    init_diag.device_address =
-        device;
-
-    init_diag.register_address =
-        reg;
-
-    bus_status =
-        i2c1_read_registers(
-            device,
-            reg,
-            data,
-            length);
+    bus_status = i2c1_read_registers(
+        device,
+        reg,
+        data,
+        length);
 
     init_diag.i2c_status =
         (uint32_t)bus_status;
@@ -111,23 +125,15 @@ static mpu9250_status_t write_byte(
 {
     i2c1_status_t bus_status;
 
-    init_diag.phase =
-        MPU_DIAG_PHASE_WRITE;
+    init_diag.phase = MPU_DIAG_PHASE_WRITE;
+    init_diag.device_address = device;
+    init_diag.register_address = reg;
+    init_diag.written_value = value;
 
-    init_diag.device_address =
-        device;
-
-    init_diag.register_address =
-        reg;
-
-    init_diag.written_value =
-        value;
-
-    bus_status =
-        i2c1_write_register(
-            device,
-            reg,
-            value);
+    bus_status = i2c1_write_register(
+        device,
+        reg,
+        value);
 
     init_diag.i2c_status =
         (uint32_t)bus_status;
@@ -146,73 +152,73 @@ static mpu9250_status_t write_and_verify(
     uint8_t value,
     uint8_t mask)
 {
-    uint8_t readback;
-    mpu9250_status_t status;
+    uint32_t attempt;
+    uint8_t readback = 0U;
+    mpu9250_status_t status =
+        MPU9250_CONFIGURATION_ERROR;
 
-    /*
-     * Remember what we are currently configuring.
-     */
-    init_diag.stage =
-        stage;
+    for (attempt = 1UL;
+         attempt <= MPU_REGISTER_VERIFY_ATTEMPTS;
+         attempt++)
+    {
+        set_operation(stage, attempt);
 
-    init_diag.register_address =
-        reg;
+        init_diag.register_address = reg;
+        init_diag.written_value = value;
+        init_diag.readback_value = 0U;
+        init_diag.mask = mask;
 
-    init_diag.written_value =
-        value;
-
-    init_diag.readback_value =
-        0U;
-
-    init_diag.mask =
-        mask;
-
-    /*
-     * Write configuration register.
-     */
-    status =
-        write_byte(
+        status = write_byte(
             mpu_address,
             reg,
             value);
 
-    if (status != MPU9250_OK)
-    {
-        return status;
-    }
+        if (status != MPU9250_OK)
+        {
+            if (attempt < MPU_REGISTER_VERIFY_ATTEMPTS)
+            {
+                delay_ms(MPU_CONFIG_RETRY_DELAY_MS);
+                continue;
+            }
 
-    /*
-     * Read the same register back.
-     */
-    status =
-        read_bytes(
+            return status;
+        }
+
+        status = read_bytes(
             mpu_address,
             reg,
             &readback,
             1U);
 
-    if (status != MPU9250_OK)
-    {
-        return status;
+        if (status != MPU9250_OK)
+        {
+            if (attempt < MPU_REGISTER_VERIFY_ATTEMPTS)
+            {
+                delay_ms(MPU_CONFIG_RETRY_DELAY_MS);
+                continue;
+            }
+
+            return status;
+        }
+
+        init_diag.readback_value = readback;
+        init_diag.phase = MPU_DIAG_PHASE_VERIFY;
+
+        if ((readback & mask) ==
+            (value & mask))
+        {
+            return MPU9250_OK;
+        }
+
+        status = MPU9250_CONFIGURATION_ERROR;
+
+        if (attempt < MPU_REGISTER_VERIFY_ATTEMPTS)
+        {
+            delay_ms(MPU_CONFIG_RETRY_DELAY_MS);
+        }
     }
 
-    init_diag.readback_value =
-        readback;
-
-    /*
-     * I2C succeeded, but now verify that the
-     * register actually contains what we requested.
-     */
-    init_diag.phase =
-        MPU_DIAG_PHASE_VERIFY;
-
-    if ((readback & mask) !=
-        (value & mask))
-    {
-        return MPU9250_CONFIGURATION_ERROR;
-    }
-
-    return MPU9250_OK;
+    return status;
 }
 
 static int16_t decode_be(
@@ -235,18 +241,16 @@ static int16_t decode_le(
 
 static mpu9250_status_t ak8963_init(void)
 {
+    uint32_t attempt;
     uint8_t asa[3];
     mpu9250_status_t status;
 
-    /*
-     * Enable bypass mode so STM32 can communicate
-     * directly with AK8963 at address 0x0C.
-     */
+    /* Allow direct STM32 access to the AK8963 at address 0x0C. */
     status = write_and_verify(
-    MPU_INIT_STAGE_INT_PIN_CFG,
-    MPU_REG_INT_PIN_CFG,
-    MPU_BYPASS_ENABLE,
-    0xF2U);
+        MPU_INIT_STAGE_INT_PIN_CFG,
+        MPU_REG_INT_PIN_CFG,
+        MPU_BYPASS_ENABLE,
+        0xF2U);
 
     if (status != MPU9250_OK)
     {
@@ -255,13 +259,32 @@ static mpu9250_status_t ak8963_init(void)
 
     delay_ms(10UL);
 
-    delay_ms(10UL);
+    status = MPU9250_COMMUNICATION_ERROR;
 
-    status = read_bytes(
-        AK8963_ADDRESS,
-        AK_REG_WIA,
-        &mag_id,
-        1U);
+    for (attempt = 1UL;
+         attempt <= MPU_ID_READ_ATTEMPTS;
+         attempt++)
+    {
+        set_operation(MPU_INIT_STAGE_AK_WHO_AM_I,
+                      attempt);
+
+        status = read_bytes(
+            AK8963_ADDRESS,
+            AK_REG_WIA,
+            &mag_id,
+            1U);
+
+        if ((status == MPU9250_OK) &&
+            (mag_id == AK8963_EXPECTED_ID))
+        {
+            break;
+        }
+
+        if (attempt < MPU_ID_READ_ATTEMPTS)
+        {
+            delay_ms(MPU_ID_RETRY_DELAY_MS);
+        }
+    }
 
     if (status != MPU9250_OK)
     {
@@ -272,6 +295,8 @@ static mpu9250_status_t ak8963_init(void)
     {
         return MPU9250_ID_MISMATCH;
     }
+
+    set_operation(MPU_INIT_STAGE_AK_MODE, 1UL);
 
     if (write_byte(
             AK8963_ADDRESS,
@@ -293,6 +318,8 @@ static mpu9250_status_t ak8963_init(void)
 
     delay_ms(10UL);
 
+    set_operation(MPU_INIT_STAGE_AK_ASA, 1UL);
+
     if (read_bytes(
             AK8963_ADDRESS,
             AK_REG_ASAX,
@@ -305,6 +332,8 @@ static mpu9250_status_t ak8963_init(void)
     mag_adjustment.x = asa[0];
     mag_adjustment.y = asa[1];
     mag_adjustment.z = asa[2];
+
+    set_operation(MPU_INIT_STAGE_AK_MODE, 1UL);
 
     if (write_byte(
             AK8963_ADDRESS,
@@ -334,6 +363,7 @@ static mpu9250_status_t ak8963_init(void)
 mpu9250_status_t mpu9250_init(
     uint8_t address)
 {
+    uint32_t attempt;
     mpu9250_status_t status;
 
     if (address > 0x7FU)
@@ -342,26 +372,20 @@ mpu9250_status_t mpu9250_init(
     }
 
     mpu_address = address;
-
     mpu_id = 0U;
     mag_id = 0U;
-
-    detected_device =
-        MPU_DEVICE_UNKNOWN;
+    detected_device = MPU_DEVICE_UNKNOWN;
 
     mag_adjustment =
         (ak8963_factory_adjustment_t){0};
 
-    init_diag =
-    (mpu_init_diag_t){0};
-
+    init_diag = (mpu_init_diag_t){0};
     init_diag.i2c_status =
         (uint32_t)I2C1_OK;
 
-    /*
-     * Reset the main IMU.
-     */
-     init_diag.stage = MPU_INIT_STAGE_RESET;
+    /* Reset the main IMU. */
+    set_operation(MPU_INIT_STAGE_RESET, 1UL);
+
     if (write_byte(
             mpu_address,
             MPU_REG_PWR_MGMT_1,
@@ -370,29 +394,49 @@ mpu9250_status_t mpu9250_init(
         return MPU9250_COMMUNICATION_ERROR;
     }
 
-    delay_ms(100UL);
+    /*
+     * The old delay source wrapped every 65.536 ms. The corrected micros()
+     * implementation makes this 100 ms reset-settle delay real and repeatable.
+     */
+    delay_ms(MPU_RESET_SETTLE_MS);
 
     /*
-     * Read main device identity.
+     * Poll identity after reset. This tolerates a sensor that needs a little
+     * longer to become responsive without hiding a persistent wrong-device ID.
      */
-     init_diag.stage = MPU_INIT_STAGE_WHO_AM_I;
-    status = read_bytes(
-        mpu_address,
-        MPU_REG_WHO_AM_I,
-        &mpu_id,
-        1U);
+    status = MPU9250_COMMUNICATION_ERROR;
+
+    for (attempt = 1UL;
+         attempt <= MPU_ID_READ_ATTEMPTS;
+         attempt++)
+    {
+        set_operation(MPU_INIT_STAGE_WHO_AM_I,
+                      attempt);
+        mpu_id = 0U;
+
+        status = read_bytes(
+            mpu_address,
+            MPU_REG_WHO_AM_I,
+            &mpu_id,
+            1U);
+
+        if ((status == MPU9250_OK) &&
+            (mpu_id == SELECTED_EXPECTED_ID))
+        {
+            break;
+        }
+
+        if (attempt < MPU_ID_READ_ATTEMPTS)
+        {
+            delay_ms(MPU_ID_RETRY_DELAY_MS);
+        }
+    }
 
     if (status != MPU9250_OK)
     {
         return status;
     }
 
-    /*
-     * Build selects the expected identity:
-     *
-     * MPU6500 → 0x70
-     * MPU9250 → 0x71
-     */
     if (mpu_id != SELECTED_EXPECTED_ID)
     {
         return MPU9250_ID_MISMATCH;
@@ -400,14 +444,12 @@ mpu9250_status_t mpu9250_init(
 
     detected_device = SELECTED_DEVICE;
 
-    /*
-     * Use gyro PLL as sensor clock source.
-     */
-   status = write_and_verify(
-    MPU_INIT_STAGE_PWR_MGMT_1,
-    MPU_REG_PWR_MGMT_1,
-    MPU_CLOCK_PLL_XGYRO,
-    0x7FU);
+    /* Use gyro PLL as the sensor clock source. */
+    status = write_and_verify(
+        MPU_INIT_STAGE_PWR_MGMT_1,
+        MPU_REG_PWR_MGMT_1,
+        MPU_CLOCK_PLL_XGYRO,
+        0x7FU);
 
     if (status != MPU9250_OK)
     {
@@ -416,38 +458,11 @@ mpu9250_status_t mpu9250_init(
 
     delay_ms(10UL);
 
-    /*
-     * Common MPU6500/MPU9250 motion configuration.
-     */
     status = write_and_verify(
-    MPU_INIT_STAGE_PWR_MGMT_2,
-    MPU_REG_PWR_MGMT_2,
-    0x00U,
-    0x3FU);
-
-    if (status != MPU9250_OK)
-    {
-        return status;
-    }
-
-
-    status = write_and_verify(
-    MPU_INIT_STAGE_CONFIG,
-    MPU_REG_CONFIG,
-    MPU_DLPF_41HZ,
-    0x07U);
-
-    if (status != MPU9250_OK)
-    {
-        return status;
-    }
-
-
-    status = write_and_verify(
-    MPU_INIT_STAGE_SMPLRT_DIV,
-    MPU_REG_SMPLRT_DIV,
-    1U,
-    0xFFU);
+        MPU_INIT_STAGE_PWR_MGMT_2,
+        MPU_REG_PWR_MGMT_2,
+        0x00U,
+        0x3FU);
 
     if (status != MPU9250_OK)
     {
@@ -455,10 +470,10 @@ mpu9250_status_t mpu9250_init(
     }
 
     status = write_and_verify(
-    MPU_INIT_STAGE_GYRO_CONFIG,
-    MPU_REG_GYRO_CONFIG,
-    MPU_GYRO_500DPS,
-    0x1BU);
+        MPU_INIT_STAGE_CONFIG,
+        MPU_REG_CONFIG,
+        MPU_DLPF_41HZ,
+        0x07U);
 
     if (status != MPU9250_OK)
     {
@@ -466,10 +481,10 @@ mpu9250_status_t mpu9250_init(
     }
 
     status = write_and_verify(
-    MPU_INIT_STAGE_ACCEL_CONFIG,
-    MPU_REG_ACCEL_CONFIG,
-    MPU_ACCEL_4G,
-    0x18U);
+        MPU_INIT_STAGE_SMPLRT_DIV,
+        MPU_REG_SMPLRT_DIV,
+        1U,
+        0xFFU);
 
     if (status != MPU9250_OK)
     {
@@ -477,48 +492,62 @@ mpu9250_status_t mpu9250_init(
     }
 
     status = write_and_verify(
-    MPU_INIT_STAGE_ACCEL_CONFIG2,
-    MPU_REG_ACCEL_CONFIG2,
-    MPU_DLPF_41HZ,
-    0x0FU);
+        MPU_INIT_STAGE_GYRO_CONFIG,
+        MPU_REG_GYRO_CONFIG,
+        MPU_GYRO_500DPS,
+        0x1BU);
 
     if (status != MPU9250_OK)
     {
         return status;
     }
-
 
     status = write_and_verify(
-    MPU_INIT_STAGE_INT_ENABLE,
-    MPU_REG_INT_ENABLE,
-    0x00U,
-    0x01U);
+        MPU_INIT_STAGE_ACCEL_CONFIG,
+        MPU_REG_ACCEL_CONFIG,
+        MPU_ACCEL_4G,
+        0x18U);
 
     if (status != MPU9250_OK)
     {
         return status;
     }
 
-    
+    status = write_and_verify(
+        MPU_INIT_STAGE_ACCEL_CONFIG2,
+        MPU_REG_ACCEL_CONFIG2,
+        MPU_DLPF_41HZ,
+        0x0FU);
+
+    if (status != MPU9250_OK)
+    {
+        return status;
+    }
+
+    /* Keep DATA_RDY disabled until imu_acquisition_start(). */
+    status = write_and_verify(
+        MPU_INIT_STAGE_INT_ENABLE,
+        MPU_REG_INT_ENABLE,
+        0x00U,
+        0x01U);
+
+    if (status != MPU9250_OK)
+    {
+        return status;
+    }
 
 #if IMU_MODEL == IMU_MODEL_MPU9250
 
-    /*
-     * Only MPU9250 has the internal AK8963.
-     */
     return ak8963_init();
 
 #else
 
-    /*
-     * MPU6500 has no internal magnetometer.
-     * Keep bypass disabled and finish initialization.
-     */
+    /* MPU6500 has no internal magnetometer; keep bypass disabled. */
     status = write_and_verify(
-    MPU_INIT_STAGE_INT_PIN_CFG,
-    MPU_REG_INT_PIN_CFG,
-    0x00U,
-    0xF2U);
+        MPU_INIT_STAGE_INT_PIN_CFG,
+        MPU_REG_INT_PIN_CFG,
+        0x00U,
+        0xF2U);
 
     if (status != MPU9250_OK)
     {
@@ -534,10 +563,10 @@ mpu9250_status_t
 mpu9250_enable_data_ready_interrupt(void)
 {
     return write_and_verify(
-    MPU_INIT_STAGE_INT_ENABLE,
-    MPU_REG_INT_ENABLE,
-    MPU_DATA_READY_ENABLE,
-    0x01U);
+        MPU_INIT_STAGE_DATA_READY_ENABLE,
+        MPU_REG_INT_ENABLE,
+        MPU_DATA_READY_ENABLE,
+        0x01U);
 }
 
 mpu9250_status_t mpu9250_read_motion_raw(
@@ -550,6 +579,9 @@ mpu9250_status_t mpu9250_read_motion_raw(
         return MPU9250_INVALID_ARGUMENT;
     }
 
+    set_operation(MPU_INIT_STAGE_RUNTIME_MOTION_READ,
+                  1UL);
+
     if (read_bytes(
             mpu_address,
             MPU_REG_ACCEL_XOUT_H,
@@ -559,26 +591,13 @@ mpu9250_status_t mpu9250_read_motion_raw(
         return MPU9250_COMMUNICATION_ERROR;
     }
 
-    sample->accel_x =
-        decode_be(&data[0]);
-
-    sample->accel_y =
-        decode_be(&data[2]);
-
-    sample->accel_z =
-        decode_be(&data[4]);
-
-    sample->temperature =
-        decode_be(&data[6]);
-
-    sample->gyro_x =
-        decode_be(&data[8]);
-
-    sample->gyro_y =
-        decode_be(&data[10]);
-
-    sample->gyro_z =
-        decode_be(&data[12]);
+    sample->accel_x = decode_be(&data[0]);
+    sample->accel_y = decode_be(&data[2]);
+    sample->accel_z = decode_be(&data[4]);
+    sample->temperature = decode_be(&data[6]);
+    sample->gyro_x = decode_be(&data[8]);
+    sample->gyro_y = decode_be(&data[10]);
+    sample->gyro_z = decode_be(&data[12]);
 
     return MPU9250_OK;
 }
@@ -588,11 +607,7 @@ mpu9250_status_t mpu9250_read_mag_raw(
 {
 #if IMU_MODEL == IMU_MODEL_MPU6500
 
-    /*
-     * MPU6500 does not contain an AK8963.
-     */
     (void)sample;
-
     return MPU9250_MAG_UNAVAILABLE;
 
 #else
@@ -604,6 +619,9 @@ mpu9250_status_t mpu9250_read_mag_raw(
     {
         return MPU9250_INVALID_ARGUMENT;
     }
+
+    set_operation(MPU_INIT_STAGE_RUNTIME_MAG_READ,
+                  1UL);
 
     if (read_bytes(
             AK8963_ADDRESS,
@@ -628,9 +646,7 @@ mpu9250_status_t mpu9250_read_mag_raw(
         return MPU9250_COMMUNICATION_ERROR;
     }
 
-    /*
-     * Reading ST2 releases the AK8963 data latch.
-     */
+    /* Reading ST2 releases the AK8963 data latch. */
     if ((data[6] & AK_ST2_HOFL) != 0U)
     {
         return MPU9250_MAG_OVERFLOW;

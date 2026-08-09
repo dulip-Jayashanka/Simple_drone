@@ -41,7 +41,7 @@ typedef struct
     uint32_t communication_errors;
 
     /*
-     * Temporary I2C1-only recovery experiment.
+     * Optional second-level I2C recovery experiment counters.
      */
     uint32_t i2c_recovery_attempts;
     uint32_t i2c_recovery_successes;

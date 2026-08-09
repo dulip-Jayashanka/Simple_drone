@@ -35,7 +35,10 @@
 #define EXTI0_PRIORITY      0x50U
 
 #define MPU9250_I2C_ADDRESS 0x68U
-#define I2C_BUS_HZ          400000UL
+
+#ifndef I2C_BUS_HZ
+#define I2C_BUS_HZ 400000UL
+#endif
 
 #ifndef I2C_RECOVERY_TEST
 #define I2C_RECOVERY_TEST 0
@@ -51,19 +54,12 @@ static bool latest_available;
 static imu_acquisition_stats_t stats;
 static mpu9250_status_t last_driver_status;
 
-/*
- * Remember the APB1 clock so I2C1 can be
- * reinitialized later during the runtime test.
- */
-static uint32_t acquisition_pclk1_hz;
-
 #if I2C_RECOVERY_TEST
 
 /*
- * This test deliberately performs only ONE
- * automatic I2C1 recovery.
- *
- * That gives us a clean diagnostic result.
+ * The low-level I2C driver now performs normal bounded recovery itself.
+ * This preserves the older one-shot acquisition-level recovery as an
+ * additional diagnostic after the low-level retries have all failed.
  */
 static bool i2c_recovery_test_used;
 
@@ -158,22 +154,8 @@ imu_acquisition_status_t imu_acquisition_init(
     latest_sample = (imu_raw_sample_t){0};
     last_driver_status = MPU9250_OK;
 
-    /*
-    * Save PCLK1 for the runtime I2C1 recovery test.
-    */
-    acquisition_pclk1_hz = pclk1_hz;
+
     exit_critical(primask);
-
-    #if I2C_RECOVERY_TEST
-
-    /*
-    * No recovery has been attempted yet.
-    */
-    i2c_recovery_test_used = false;
-
-    #endif
-
-    
 
     if (i2c1_init(pclk1_hz, I2C_BUS_HZ) != I2C1_OK)
     {
@@ -187,6 +169,11 @@ imu_acquisition_status_t imu_acquisition_init(
     {
         return IMU_ACQUISITION_MPU_INIT_FAILED;
     }
+
+#if I2C_RECOVERY_TEST
+    /* Arm the optional test only after normal MPU initialization succeeds. */
+    i2c_recovery_test_used = false;
+#endif
 
     if (!data_ready_exti_init())
     {
@@ -262,116 +249,58 @@ imu_acquisition_status_t imu_acquisition_process(void)
     last_driver_status =
         mpu9250_read_motion_raw(&candidate.motion);
 
-   if (last_driver_status != MPU9250_OK)
-{
-    stats.communication_errors++;
+    if (last_driver_status != MPU9250_OK)
+    {
+        stats.communication_errors++;
 
 #if I2C_RECOVERY_TEST
 
-    /*
-     * =================================================
-     * ONE-SHOT I2C1 RECOVERY EXPERIMENT
-     * =================================================
-     *
-     * A runtime MPU motion read failed.
-     *
-     * We now:
-     *
-     * 1. Reset/reinitialize ONLY STM32 I2C1.
-     * 2. Do NOT reset the MCU.
-     * 3. Do NOT call mpu9250_init().
-     * 4. Do NOT reset the MPU6500.
-     * 5. Retry exactly the same motion read once.
-     */
-
-    if (!i2c_recovery_test_used)
-    {
-        i2c1_status_t recovery_status;
-
         /*
-         * Prevent a second automatic recovery.
-         * This keeps the experiment controlled.
+         * Optional one-shot second-level recovery experiment. The I2C1
+         * driver has already exhausted its own bounded retries/recovery.
          */
-        i2c_recovery_test_used = true;
-
-        stats.i2c_recovery_attempts++;
-
-        /*
-         * Reset and configure ONLY STM32 I2C1.
-         */
-        recovery_status =
-            i2c1_init(
-                acquisition_pclk1_hz,
-                I2C_BUS_HZ);
-
-        if (recovery_status == I2C1_OK)
+        if (!i2c_recovery_test_used)
         {
-            /*
-             * Retry the exact same MPU6500
-             * 14-byte motion read once.
-             */
-            last_driver_status =
-                mpu9250_read_motion_raw(
-                    &candidate.motion);
+            i2c1_status_t recovery_status;
 
-            if (last_driver_status == MPU9250_OK)
+            i2c_recovery_test_used = true;
+            stats.i2c_recovery_attempts++;
+
+            recovery_status = i2c1_recover();
+
+            if (recovery_status == I2C1_OK)
             {
-                /*
-                 * Very important result:
-                 *
-                 * I2C1-only reset recovered
-                 * communication.
-                 */
-                stats.i2c_recovery_successes++;
+                last_driver_status =
+                    mpu9250_read_motion_raw(
+                        &candidate.motion);
 
-                /*
-                 * Do NOT return.
-                 *
-                 * Continue normal processing below
-                 * using the successfully read sample.
-                 */
+                if (last_driver_status == MPU9250_OK)
+                {
+                    stats.i2c_recovery_successes++;
+                }
+                else
+                {
+                    stats.i2c_recovery_failures++;
+                    return IMU_ACQUISITION_READ_FAILED;
+                }
             }
             else
             {
-                /*
-                 * I2C1 reset succeeded, but the
-                 * MPU read still failed.
-                 */
                 stats.i2c_recovery_failures++;
-
                 return IMU_ACQUISITION_READ_FAILED;
             }
         }
         else
         {
-            /*
-             * I2C1 itself could not be
-             * reinitialized successfully.
-             */
-            stats.i2c_recovery_failures++;
-
             return IMU_ACQUISITION_READ_FAILED;
         }
-    }
-    else
-    {
-        /*
-         * The one-shot recovery test was already used.
-         *
-         * Do not reset anything again.
-         */
-        return IMU_ACQUISITION_READ_FAILED;
-    }
 
 #else
 
-    /*
-     * Normal production behavior.
-     */
-    return IMU_ACQUISITION_READ_FAILED;
+        return IMU_ACQUISITION_READ_FAILED;
 
 #endif
-}
+    }
 
     candidate.motion_timestamp_us = event_timestamp;
     candidate.flags |= IMU_RAW_MOTION_VALID;

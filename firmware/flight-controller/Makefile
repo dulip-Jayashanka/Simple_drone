@@ -4,6 +4,7 @@ ACQ_UART_RAW_DEBUG ?= 0
 MPU_WHO_AM_I_TEST ?= 0
 IMU_INIT_DEBUG ?= 0
 I2C_RECOVERY_TEST ?= 0
+I2C_BUS_HZ ?= 400000
 IMU_MODEL ?= 9250
 
 VALID_IMU_MODELS := 6500 9250
@@ -41,6 +42,7 @@ CFLAGS := $(CPU_FLAGS) \
 	-DMPU_WHO_AM_I_TEST=$(MPU_WHO_AM_I_TEST) \
 	-DIMU_INIT_DEBUG=$(IMU_INIT_DEBUG) \
 	-DI2C_RECOVERY_TEST=$(I2C_RECOVERY_TEST) \
+	-DI2C_BUS_HZ=$(I2C_BUS_HZ) \
 	-DIMU_MODEL=$(IMU_MODEL) \
 	-Iinclude \
 	-I$(PLATFORM_DIR)/include \
@@ -108,7 +110,7 @@ size: $(ELF)
 inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(NM) -n $(ELF) | grep -E \
-		'EXTI0_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_imu_acquisition_stats|micros|i2c1_read_registers'
+		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_imu_acquisition_stats|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
 
 test-host:
 	mkdir -p build/host

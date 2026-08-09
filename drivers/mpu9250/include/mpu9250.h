@@ -132,7 +132,15 @@ typedef enum
     MPU_INIT_STAGE_ACCEL_CONFIG2,
 
     MPU_INIT_STAGE_INT_ENABLE,
-    MPU_INIT_STAGE_INT_PIN_CFG
+    MPU_INIT_STAGE_INT_PIN_CFG,
+
+    MPU_INIT_STAGE_AK_WHO_AM_I,
+    MPU_INIT_STAGE_AK_MODE,
+    MPU_INIT_STAGE_AK_ASA,
+
+    MPU_INIT_STAGE_DATA_READY_ENABLE,
+    MPU_INIT_STAGE_RUNTIME_MOTION_READ,
+    MPU_INIT_STAGE_RUNTIME_MAG_READ
 
 } mpu_init_stage_t;
 
@@ -169,6 +177,9 @@ typedef struct
     uint8_t readback_value;
 
     uint8_t mask;
+
+    /* High-level retry number for the current MPU operation. */
+    uint32_t attempt;
 
 } mpu_init_diag_t;
 
