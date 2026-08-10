@@ -27,6 +27,14 @@
 #define ACCEL_CAPTURE_TEST 0
 #endif
 
+#ifndef GYRO_CAPTURE_TEST
+#define GYRO_CAPTURE_TEST 0
+#endif
+
+#if ACCEL_CAPTURE_TEST && GYRO_CAPTURE_TEST
+#error "ACCEL_CAPTURE_TEST and GYRO_CAPTURE_TEST cannot both be enabled"
+#endif
+
 #ifndef ACCEL_PIPELINE_ENABLE
 #define ACCEL_PIPELINE_ENABLE 0
 #endif
@@ -139,6 +147,33 @@ static accel_capture_sample_t
     accel_capture_buffer[ACCEL_CAPTURE_MAX_SAMPLES];
 
 static uint32_t accel_capture_count;
+
+#endif
+
+#if GYRO_CAPTURE_TEST
+
+/*
+ * Five-second raw gyroscope capture at the configured 500 Hz motion rate.
+ * The 2600-sample allowance protects SRAM while allowing small timing
+ * variations. Each sample is six bytes, so the buffer uses 15,600 bytes.
+ */
+#define GYRO_CAPTURE_DURATION_US  5000000UL
+#define GYRO_CAPTURE_MAX_SAMPLES 2600UL
+
+/* 240 x 5 seconds = 20 minutes of actual captured gyro data. */
+#define GYRO_CAPTURE_TOTAL_BLOCKS 240UL
+
+typedef struct
+{
+    int16_t x;
+    int16_t y;
+    int16_t z;
+} gyro_capture_sample_t;
+
+static gyro_capture_sample_t
+    gyro_capture_buffer[GYRO_CAPTURE_MAX_SAMPLES];
+
+static uint32_t gyro_capture_count;
 
 #endif
 
@@ -774,6 +809,156 @@ void run_accel_capture_test(void)
 
 #endif
 
+#if GYRO_CAPTURE_TEST
+
+static void gyro_capture_write_signed(int16_t value)
+{
+    int32_t wide;
+
+    wide = (int32_t)value;
+
+    if (wide < 0)
+    {
+        (void)uart_diag_write_char('-');
+        wide = -wide;
+    }
+
+    (void)uart_diag_write_uint32((uint32_t)wide);
+}
+
+static void gyro_capture_send_values(
+    uint32_t block_number,
+    uint32_t block_start_us)
+{
+    uint32_t i;
+
+    (void)uart_diag_write_string(
+        "# GYRO_CAPTURE_BEGIN block=");
+    (void)uart_diag_write_uint32(block_number);
+    (void)uart_diag_write_string(" samples=");
+    (void)uart_diag_write_uint32(gyro_capture_count);
+    (void)uart_diag_write_string(" start_us=");
+    (void)uart_diag_write_uint32(block_start_us);
+    (void)uart_diag_write_string("\r\n");
+
+    (void)uart_diag_write_line(
+        "block,index,gx_raw,gy_raw,gz_raw");
+
+    for (i = 0UL; i < gyro_capture_count; i++)
+    {
+        (void)uart_diag_write_uint32(block_number);
+        (void)uart_diag_write_char(',');
+        (void)uart_diag_write_uint32(i);
+        (void)uart_diag_write_char(',');
+        gyro_capture_write_signed(gyro_capture_buffer[i].x);
+        (void)uart_diag_write_char(',');
+        gyro_capture_write_signed(gyro_capture_buffer[i].y);
+        (void)uart_diag_write_char(',');
+        gyro_capture_write_signed(gyro_capture_buffer[i].z);
+        (void)uart_diag_write_string("\r\n");
+    }
+
+    (void)uart_diag_write_string(
+        "# GYRO_CAPTURE_END block=");
+    (void)uart_diag_write_uint32(block_number);
+    (void)uart_diag_write_string("\r\n");
+}
+
+static __attribute__((noreturn))
+void run_gyro_capture_test(void)
+{
+    imu_raw_sample_t sample;
+    uint32_t start_time_us;
+    uint32_t elapsed_us;
+    uint32_t block_number;
+    bool started;
+
+    for (block_number = 1UL;
+         block_number <= GYRO_CAPTURE_TOTAL_BLOCKS;
+         block_number++)
+    {
+        /* Logically discard the old block; new samples overwrite it. */
+        gyro_capture_count = 0UL;
+        start_time_us = 0UL;
+        elapsed_us = 0UL;
+        started = false;
+
+        /* Capture first. No blocking UART writes occur in this loop. */
+        for (;;)
+        {
+            g_imu_acquisition_status =
+                imu_acquisition_process();
+
+            if (g_imu_acquisition_status !=
+                IMU_ACQUISITION_OK)
+            {
+                continue;
+            }
+
+            if (!imu_acquisition_get_latest(&sample))
+            {
+                continue;
+            }
+
+            if ((sample.flags & IMU_RAW_MOTION_VALID) == 0UL)
+            {
+                continue;
+            }
+
+            if (!started)
+            {
+                start_time_us = sample.motion_timestamp_us;
+                started = true;
+            }
+
+            elapsed_us =
+                (uint32_t)(sample.motion_timestamp_us -
+                           start_time_us);
+
+            if (elapsed_us >= GYRO_CAPTURE_DURATION_US)
+            {
+                break;
+            }
+
+            if (gyro_capture_count >=
+                GYRO_CAPTURE_MAX_SAMPLES)
+            {
+                break;
+            }
+
+            gyro_capture_buffer[gyro_capture_count].x =
+                sample.motion.gyro_x;
+            gyro_capture_buffer[gyro_capture_count].y =
+                sample.motion.gyro_y;
+            gyro_capture_buffer[gyro_capture_count].z =
+                sample.motion.gyro_z;
+            gyro_capture_count++;
+        }
+
+        if (g_fc_uart_status == UART_DIAG_OK)
+        {
+            (void)uart_diag_write_string(
+                "[GYRO CAPTURE] block=");
+            (void)uart_diag_write_uint32(block_number);
+            (void)uart_diag_write_string("/");
+            (void)uart_diag_write_uint32(
+                GYRO_CAPTURE_TOTAL_BLOCKS);
+            (void)uart_diag_write_string(" samples=");
+            (void)uart_diag_write_uint32(gyro_capture_count);
+            (void)uart_diag_write_string("\r\n");
+
+            gyro_capture_send_values(
+                block_number,
+                start_time_us);
+        }
+    }
+
+    stop_with_message(
+        "[HALT] 20-minute gyroscope capture finished");
+}
+
+#endif
+
 
 //test function
 
@@ -1280,6 +1465,16 @@ if (g_fc_uart_status == UART_DIAG_OK)
 
 #endif
 
+#if GYRO_CAPTURE_TEST
+
+    (void)uart_diag_write_line(
+        "[TEST] Repeated 5-second gyroscope capture");
+
+    (void)uart_diag_write_line(
+        "[TEST] Target = 240 blocks = 20 minutes captured data");
+
+#endif
+
     (void)uart_diag_write_line(
         "[READY] Starting PA0 DATA_RDY");
 }
@@ -1307,6 +1502,16 @@ if (g_imu_acquisition_status != IMU_ACQUISITION_OK)
  * Function halts after all blocks complete.
  */
 run_accel_capture_test();
+
+#endif
+
+#if GYRO_CAPTURE_TEST
+
+/*
+ * Repeatedly capture five seconds of raw gyro data, transmit the completed
+ * block, and reuse the same SRAM buffer. This function halts after 240 blocks.
+ */
+run_gyro_capture_test();
 
 #endif
 
