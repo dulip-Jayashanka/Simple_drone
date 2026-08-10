@@ -9,6 +9,10 @@ IMU_MODEL ?= 9250
 ACCEL_CAPTURE_TEST ?= 0
 GYRO_CAPTURE_TEST ?= 0
 ACCEL_PIPELINE_ENABLE ?= 0
+GYRO_PIPELINE_ENABLE ?= 0
+GYRO_PIPELINE_UART_DEBUG ?= 0
+GYRO_INITIAL_BIAS_CAL_ENABLE ?= 0
+GYRO_PIPELINE_UART_RATE_HZ ?= 10
 MEASURE_PIPELINE_TIMES ?= 0
 ACCEL_PIPELINE_DEBUG_RAW ?= 0
 ACCEL_PIPELINE_DEBUG_MEDIAN ?= 0
@@ -25,6 +29,9 @@ BOOLEAN_BUILD_VALUES := \
 	$(ACCEL_CAPTURE_TEST) \
 	$(GYRO_CAPTURE_TEST) \
 	$(ACCEL_PIPELINE_ENABLE) \
+	$(GYRO_PIPELINE_ENABLE) \
+	$(GYRO_PIPELINE_UART_DEBUG) \
+	$(GYRO_INITIAL_BIAS_CAL_ENABLE) \
 	$(MEASURE_PIPELINE_TIMES) \
 	$(ACCEL_PIPELINE_DEBUG_RAW) \
 	$(ACCEL_PIPELINE_DEBUG_MEDIAN) \
@@ -53,6 +60,24 @@ ifeq ($(ACCEL_CAPTURE_TEST)$(GYRO_CAPTURE_TEST),11)
 $(error ACCEL_CAPTURE_TEST and GYRO_CAPTURE_TEST cannot both be enabled)
 endif
 
+ifeq ($(GYRO_PIPELINE_UART_DEBUG),1)
+ifneq ($(GYRO_PIPELINE_ENABLE),1)
+$(error GYRO_PIPELINE_UART_DEBUG requires GYRO_PIPELINE_ENABLE=1)
+endif
+endif
+
+ifeq ($(GYRO_INITIAL_BIAS_CAL_ENABLE),1)
+ifneq ($(GYRO_PIPELINE_ENABLE),1)
+$(error GYRO_INITIAL_BIAS_CAL_ENABLE requires GYRO_PIPELINE_ENABLE=1)
+endif
+endif
+
+ifneq ($(filter 1,$(ACCEL_CAPTURE_TEST) $(GYRO_CAPTURE_TEST)),)
+ifeq ($(GYRO_PIPELINE_ENABLE),1)
+$(error Gyro pipeline cannot run while a capture test owns the main loop)
+endif
+endif
+
 ifeq ($(MEASURE_PIPELINE_TIMES),1)
 ifneq ($(ACCEL_PIPELINE_ENABLE),1)
 $(error MEASURE_PIPELINE_TIMES requires ACCEL_PIPELINE_ENABLE=1)
@@ -62,6 +87,12 @@ endif
 ifeq ($(ACCEL_PIPELINE_ENABLE),1)
 ifneq ($(IMU_MODEL),6500)
 $(error Current accelerometer calibration constants belong to IMU_MODEL=6500)
+endif
+endif
+
+ifeq ($(GYRO_PIPELINE_ENABLE),1)
+ifneq ($(IMU_MODEL),6500)
+$(error Current gyroscope bias constants belong to IMU_MODEL=6500)
 endif
 endif
 
@@ -114,6 +145,10 @@ CFLAGS := $(CPU_FLAGS) \
 	-DACCEL_CAPTURE_TEST=$(ACCEL_CAPTURE_TEST) \
 	-DGYRO_CAPTURE_TEST=$(GYRO_CAPTURE_TEST) \
 	-DACCEL_PIPELINE_ENABLE=$(ACCEL_PIPELINE_ENABLE) \
+	-DGYRO_PIPELINE_ENABLE=$(GYRO_PIPELINE_ENABLE) \
+	-DGYRO_PIPELINE_UART_DEBUG=$(GYRO_PIPELINE_UART_DEBUG) \
+	-DGYRO_INITIAL_BIAS_CAL_ENABLE=$(GYRO_INITIAL_BIAS_CAL_ENABLE) \
+	-DGYRO_PIPELINE_UART_RATE_HZ=$(GYRO_PIPELINE_UART_RATE_HZ) \
 	-DMEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES) \
 	-DACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW) \
 	-DACCEL_PIPELINE_DEBUG_MEDIAN=$(ACCEL_PIPELINE_DEBUG_MEDIAN) \
@@ -152,6 +187,10 @@ ifeq ($(ACCEL_PIPELINE_ENABLE),1)
 SOURCES += src/accel_pipeline.c
 endif
 
+ifeq ($(GYRO_PIPELINE_ENABLE),1)
+SOURCES += src/gyro_pipeline.c
+endif
+
 OBJECTS := \
 	$(addprefix $(BUILD_DIR)/,$(notdir $(SOURCES:.c=.o)))
 
@@ -162,7 +201,7 @@ ELF := $(BUILD_DIR)/$(PROJECT).elf
 BIN := $(BUILD_DIR)/$(PROJECT).bin
 HEX := $(BUILD_DIR)/$(PROJECT).hex
 
-.PHONY: all clean size inspect test-host test-accel-host FORCE
+.PHONY: all clean size inspect test-host test-accel-host test-gyro-host FORCE
 
 all: $(ELF) $(BIN) $(HEX) size
 
@@ -182,6 +221,10 @@ $(CONFIG_STAMP): FORCE | $(BUILD_DIR)
 		'ACCEL_CAPTURE_TEST=$(ACCEL_CAPTURE_TEST)' \
 		'GYRO_CAPTURE_TEST=$(GYRO_CAPTURE_TEST)' \
 		'ACCEL_PIPELINE_ENABLE=$(ACCEL_PIPELINE_ENABLE)' \
+		'GYRO_PIPELINE_ENABLE=$(GYRO_PIPELINE_ENABLE)' \
+		'GYRO_PIPELINE_UART_DEBUG=$(GYRO_PIPELINE_UART_DEBUG)' \
+		'GYRO_INITIAL_BIAS_CAL_ENABLE=$(GYRO_INITIAL_BIAS_CAL_ENABLE)' \
+		'GYRO_PIPELINE_UART_RATE_HZ=$(GYRO_PIPELINE_UART_RATE_HZ)' \
 		'MEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES)' \
 		'ACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW)' \
 		'ACCEL_PIPELINE_DEBUG_MEDIAN=$(ACCEL_PIPELINE_DEBUG_MEDIAN)' \
@@ -217,7 +260,7 @@ size: $(ELF)
 inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(NM) -n $(ELF) | grep -E \
-		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
+		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_latest_gyro_pipeline_output|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
 
 test-host:
 	mkdir -p build/host
@@ -250,6 +293,22 @@ test-accel-host:
 		-lm \
 		-o build/host/accel_pipeline_test
 	./build/host/accel_pipeline_test
+
+test-gyro-host:
+	mkdir -p build/host
+	$(HOST_CC) \
+		-std=c11 \
+		-Wall \
+		-Wextra \
+		-Werror \
+		-O0 \
+		-g3 \
+		-Iinclude \
+		tests/gyro_pipeline_test.c \
+		src/gyro_pipeline.c \
+		-lm \
+		-o build/host/gyro_pipeline_test
+	./build/host/gyro_pipeline_test
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -2,6 +2,9 @@
 #if ACCEL_PIPELINE_ENABLE
 #include "accel_pipeline.h"
 #endif
+#if GYRO_PIPELINE_ENABLE
+#include "gyro_pipeline.h"
+#endif
 #include "imu_acquisition.h"
 #include "micros.h"
 #include "mpu9250.h"
@@ -37,6 +40,46 @@
 
 #ifndef ACCEL_PIPELINE_ENABLE
 #define ACCEL_PIPELINE_ENABLE 0
+#endif
+
+#ifndef GYRO_PIPELINE_ENABLE
+#define GYRO_PIPELINE_ENABLE 0
+#endif
+
+#ifndef GYRO_PIPELINE_UART_DEBUG
+#define GYRO_PIPELINE_UART_DEBUG 0
+#endif
+
+#ifndef GYRO_INITIAL_BIAS_CAL_ENABLE
+#define GYRO_INITIAL_BIAS_CAL_ENABLE 0
+#endif
+
+#ifndef GYRO_PIPELINE_UART_RATE_HZ
+#define GYRO_PIPELINE_UART_RATE_HZ 10
+#endif
+
+#if GYRO_PIPELINE_UART_DEBUG && !GYRO_PIPELINE_ENABLE
+#error "GYRO_PIPELINE_UART_DEBUG requires GYRO_PIPELINE_ENABLE=1"
+#endif
+
+#if GYRO_INITIAL_BIAS_CAL_ENABLE && !GYRO_PIPELINE_ENABLE
+#error "GYRO_INITIAL_BIAS_CAL_ENABLE requires GYRO_PIPELINE_ENABLE=1"
+#endif
+
+#if GYRO_PIPELINE_UART_DEBUG && \
+    ((GYRO_PIPELINE_UART_RATE_HZ < 1) || \
+     (GYRO_PIPELINE_UART_RATE_HZ > 500))
+#error "GYRO_PIPELINE_UART_RATE_HZ must be from 1 to 500"
+#endif
+
+#if GYRO_PIPELINE_ENABLE && \
+    (ACCEL_CAPTURE_TEST || GYRO_CAPTURE_TEST)
+#error "Gyro pipeline cannot run while a capture test owns the main loop"
+#endif
+
+#if GYRO_PIPELINE_UART_DEBUG
+#define GYRO_PIPELINE_UART_PERIOD_US \
+    (1000000UL / (uint32_t)GYRO_PIPELINE_UART_RATE_HZ)
 #endif
 
 #ifndef MEASURE_PIPELINE_TIMES
@@ -119,7 +162,7 @@ volatile imu_acquisition_status_t
  *
  * Expected sample rate is about 500 Hz.
  *
- * 5 seconds × 500 Hz ≈ 2500 samples.
+ * 5 seconds Ã— 500 Hz â‰ˆ 2500 samples.
  *
  * A little extra space is reserved so timing variation
  * does not overflow the buffer.
@@ -188,6 +231,13 @@ volatile imu_acquisition_stats_t
 
 volatile accel_pipeline_output_t
     g_latest_accel_pipeline_output;
+
+#endif
+
+#if GYRO_PIPELINE_ENABLE
+
+volatile gyro_pipeline_output_t
+    g_latest_gyro_pipeline_output;
 
 #endif
 
@@ -358,6 +408,143 @@ static void accel_debug_write_pipeline(
     (void)uart_diag_write_hex32(output->flags);
     (void)uart_diag_write_string("\r\n");
 }
+
+#endif
+
+#if GYRO_PIPELINE_ENABLE
+
+static void gyro_uart_write_fixed3(float value)
+{
+    int32_t scaled;
+    uint32_t magnitude;
+    uint32_t fraction;
+
+    if (value < 0.0f)
+    {
+        scaled = (int32_t)((value * 1000.0f) - 0.5f);
+    }
+    else
+    {
+        scaled = (int32_t)((value * 1000.0f) + 0.5f);
+    }
+
+    if (scaled < 0)
+    {
+        (void)uart_diag_write_char('-');
+        magnitude = (uint32_t)(-scaled);
+    }
+    else
+    {
+        magnitude = (uint32_t)scaled;
+    }
+
+    (void)uart_diag_write_uint32(magnitude / 1000UL);
+    (void)uart_diag_write_char('.');
+
+    fraction = magnitude % 1000UL;
+
+    if (fraction < 100UL)
+    {
+        (void)uart_diag_write_char('0');
+    }
+
+    if (fraction < 10UL)
+    {
+        (void)uart_diag_write_char('0');
+    }
+
+    (void)uart_diag_write_uint32(fraction);
+}
+
+static void gyro_uart_write_float_triplet(
+    float x,
+    float y,
+    float z)
+{
+    gyro_uart_write_fixed3(x);
+    (void)uart_diag_write_char(',');
+    gyro_uart_write_fixed3(y);
+    (void)uart_diag_write_char(',');
+    gyro_uart_write_fixed3(z);
+}
+
+static void gyro_uart_report_calibration_state(
+    const gyro_pipeline_output_t *output,
+    uint32_t previous_flags)
+{
+    if ((output->flags & GYRO_BIAS_SETTLING) != 0UL)
+    {
+        if ((previous_flags & GYRO_BIAS_SETTLING) == 0UL)
+        {
+            if ((output->flags & GYRO_BIAS_UNSTABLE) != 0UL)
+            {
+                (void)uart_diag_write_line(
+                    "[GYRO CAL] Motion detected; restarting calibration");
+            }
+
+            (void)uart_diag_write_line(
+                "[GYRO CAL] Settling for 5 seconds; keep stationary");
+        }
+    }
+    else if ((output->flags & GYRO_BIAS_CALIBRATING) != 0UL)
+    {
+        if ((previous_flags & GYRO_BIAS_CALIBRATING) == 0UL)
+        {
+            (void)uart_diag_write_line(
+                "[GYRO CAL] Collecting 5 seconds; keep stationary");
+        }
+    }
+    else if (((output->flags & GYRO_BIAS_READY) != 0UL) &&
+             ((previous_flags & GYRO_BIAS_READY) == 0UL))
+    {
+        if ((output->flags & GYRO_BIAS_FROM_STARTUP) != 0UL)
+        {
+            (void)uart_diag_write_string(
+                "[GYRO CAL] Startup bias ready samples=");
+            (void)uart_diag_write_uint32(
+                output->calibration_sample_count);
+        }
+        else
+        {
+            (void)uart_diag_write_string(
+                "[GYRO CAL] Using fixed 20-minute bias");
+        }
+
+        (void)uart_diag_write_string(" bias_counts=");
+        gyro_uart_write_float_triplet(
+            output->bias_x_counts,
+            output->bias_y_counts,
+            output->bias_z_counts);
+        (void)uart_diag_write_string("\r\n");
+    }
+}
+
+#if GYRO_PIPELINE_UART_DEBUG
+
+static void gyro_uart_write_pipeline(
+    const gyro_pipeline_output_t *output)
+{
+    (void)uart_diag_write_string("[GYRO PIPE] seq=");
+    (void)uart_diag_write_uint32(output->sequence);
+
+    (void)uart_diag_write_string(" t_us=");
+    (void)uart_diag_write_uint32(output->timestamp_us);
+
+    (void)uart_diag_write_string(" dt_us=");
+    (void)uart_diag_write_uint32(output->sample_interval_us);
+
+    (void)uart_diag_write_string(" dps=");
+    gyro_uart_write_float_triplet(
+        output->x_dps,
+        output->y_dps,
+        output->z_dps);
+
+    (void)uart_diag_write_string(" flags=");
+    (void)uart_diag_write_hex32(output->flags);
+    (void)uart_diag_write_string("\r\n");
+}
+
+#endif
 
 #endif
 
@@ -631,7 +818,7 @@ void run_accel_capture_test(void)
      * -------------------------------------------------
      * Repeat 5-second captures.
      *
-     * 240 blocks × 5 seconds =
+     * 240 blocks Ã— 5 seconds =
      * 1200 seconds =
      * 20 minutes of recorded accelerometer data.
      * -------------------------------------------------
@@ -1118,6 +1305,18 @@ int main(void)
     accel_pipeline_output_t accel_output;
 #endif
 
+#if GYRO_PIPELINE_ENABLE
+    gyro_pipeline_input_t gyro_input;
+    gyro_pipeline_output_t gyro_output;
+    uint32_t gyro_previous_calibration_flags;
+#endif
+
+#if GYRO_PIPELINE_UART_DEBUG
+    bool gyro_output_ready;
+    uint32_t gyro_previous_uart_timestamp_us;
+    bool gyro_uart_timestamp_valid;
+#endif
+
 #if MEASURE_PIPELINE_TIMES
     uint32_t pipeline_start_us;
     uint32_t pipeline_elapsed_us;
@@ -1152,7 +1351,7 @@ int main(void)
 
     /*
      * When the APB1 prescaler is not 1,
-     * STM32F103 timer clock = 2 × PCLK1.
+     * STM32F103 timer clock = 2 Ã— PCLK1.
      */
     pclk1_hz = system_clock_get_pclk1_hz();
 
@@ -1405,6 +1604,25 @@ int main(void)
     }
 #endif
 
+#if GYRO_PIPELINE_ENABLE
+    gyro_pipeline_init(
+        GYRO_INITIAL_BIAS_CAL_ENABLE != 0);
+    g_latest_gyro_pipeline_output =
+        (gyro_pipeline_output_t){0};
+    gyro_previous_calibration_flags = 0UL;
+
+#if GYRO_PIPELINE_UART_DEBUG
+    gyro_previous_uart_timestamp_us = 0UL;
+    gyro_uart_timestamp_valid = false;
+#endif
+
+    if (g_fc_uart_status == UART_DIAG_OK)
+    {
+        (void)uart_diag_write_line(
+            "[GYRO PIPE] validate -> bias -> dps -> rad/s");
+    }
+#endif
+
 #if MEASURE_PIPELINE_TIMES
     g_pipeline_time_last_us = 0UL;
     g_pipeline_time_min_us = 0UL;
@@ -1593,6 +1811,66 @@ for (;;)
                 }
             }
 #endif
+
+#if GYRO_PIPELINE_ENABLE
+            if ((sample.flags & IMU_RAW_MOTION_VALID) != 0UL)
+            {
+                gyro_input.sequence = sample.sequence;
+                gyro_input.timestamp_us =
+                    sample.motion_timestamp_us;
+                gyro_input.raw_x = sample.motion.gyro_x;
+                gyro_input.raw_y = sample.motion.gyro_y;
+                gyro_input.raw_z = sample.motion.gyro_z;
+
+#if GYRO_PIPELINE_UART_DEBUG
+                gyro_output_ready = gyro_pipeline_process(
+                    &gyro_input,
+                    &gyro_output);
+#else
+                (void)gyro_pipeline_process(
+                    &gyro_input,
+                    &gyro_output);
+#endif
+
+                g_latest_gyro_pipeline_output = gyro_output;
+
+                if (g_fc_uart_status == UART_DIAG_OK)
+                {
+                    uint32_t calibration_flags;
+
+                    calibration_flags =
+                        gyro_output.flags &
+                        (GYRO_BIAS_READY |
+                         GYRO_BIAS_SETTLING |
+                         GYRO_BIAS_CALIBRATING);
+
+                    if (calibration_flags != 0UL)
+                    {
+                        gyro_uart_report_calibration_state(
+                            &gyro_output,
+                            gyro_previous_calibration_flags);
+
+                        gyro_previous_calibration_flags =
+                            gyro_output.flags;
+                    }
+
+#if GYRO_PIPELINE_UART_DEBUG
+                    if (gyro_output_ready &&
+                        ((!gyro_uart_timestamp_valid) ||
+                         ((uint32_t)(
+                              gyro_output.timestamp_us -
+                              gyro_previous_uart_timestamp_us) >=
+                          GYRO_PIPELINE_UART_PERIOD_US)))
+                    {
+                        gyro_uart_write_pipeline(&gyro_output);
+                        gyro_previous_uart_timestamp_us =
+                            gyro_output.timestamp_us;
+                        gyro_uart_timestamp_valid = true;
+                    }
+#endif
+                }
+            }
+#endif
         }
 
         g_imu_acquisition_stats =
@@ -1657,3 +1935,4 @@ for (;;)
         __asm volatile ("nop");
     }
 }
+
