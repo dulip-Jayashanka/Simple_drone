@@ -315,5 +315,5 @@ Simple_drone/
 
 - [`docs/accelerometer-pipeline.md`](docs/accelerometer-pipeline.md) — accelerometer stages, debug flags, timing, memory use, and tests
 - [`docs/gyro-stationary-capture.md`](docs/gyro-stationary-capture.md) — stationary gyroscope capture procedure and plotting workflow
-- [`docs/tuning.md`](docs/tuning.md) — broader GY-87 calibration, validation, pre-flight, and tuning roadmap
+
 

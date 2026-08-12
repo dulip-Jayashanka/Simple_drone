@@ -13,6 +13,10 @@ GYRO_PIPELINE_ENABLE ?= 0
 GYRO_PIPELINE_UART_DEBUG ?= 0
 GYRO_INITIAL_BIAS_CAL_ENABLE ?= 0
 GYRO_PIPELINE_UART_RATE_HZ ?= 10
+ATTITUDE_ESTIMATOR_ENABLE ?= 0
+ATTITUDE_ESTIMATOR_UART_DEBUG ?= 0
+ATTITUDE_ESTIMATOR_UART_RATE_HZ ?= 2
+ATTITUDE_EULER_RATE_HZ ?= 100
 MEASURE_PIPELINE_TIMES ?= 0
 ACCEL_PIPELINE_DEBUG_RAW ?= 0
 ACCEL_PIPELINE_DEBUG_MEDIAN ?= 0
@@ -32,6 +36,8 @@ BOOLEAN_BUILD_VALUES := \
 	$(GYRO_PIPELINE_ENABLE) \
 	$(GYRO_PIPELINE_UART_DEBUG) \
 	$(GYRO_INITIAL_BIAS_CAL_ENABLE) \
+	$(ATTITUDE_ESTIMATOR_ENABLE) \
+	$(ATTITUDE_ESTIMATOR_UART_DEBUG) \
 	$(MEASURE_PIPELINE_TIMES) \
 	$(ACCEL_PIPELINE_DEBUG_RAW) \
 	$(ACCEL_PIPELINE_DEBUG_MEDIAN) \
@@ -69,6 +75,21 @@ endif
 ifeq ($(GYRO_INITIAL_BIAS_CAL_ENABLE),1)
 ifneq ($(GYRO_PIPELINE_ENABLE),1)
 $(error GYRO_INITIAL_BIAS_CAL_ENABLE requires GYRO_PIPELINE_ENABLE=1)
+endif
+endif
+
+ifeq ($(ATTITUDE_ESTIMATOR_ENABLE),1)
+ifneq ($(ACCEL_PIPELINE_ENABLE),1)
+$(error ATTITUDE_ESTIMATOR_ENABLE requires ACCEL_PIPELINE_ENABLE=1)
+endif
+ifneq ($(GYRO_PIPELINE_ENABLE),1)
+$(error ATTITUDE_ESTIMATOR_ENABLE requires GYRO_PIPELINE_ENABLE=1)
+endif
+endif
+
+ifeq ($(ATTITUDE_ESTIMATOR_UART_DEBUG),1)
+ifneq ($(ATTITUDE_ESTIMATOR_ENABLE),1)
+$(error ATTITUDE_ESTIMATOR_UART_DEBUG requires ATTITUDE_ESTIMATOR_ENABLE=1)
 endif
 endif
 
@@ -149,6 +170,10 @@ CFLAGS := $(CPU_FLAGS) \
 	-DGYRO_PIPELINE_UART_DEBUG=$(GYRO_PIPELINE_UART_DEBUG) \
 	-DGYRO_INITIAL_BIAS_CAL_ENABLE=$(GYRO_INITIAL_BIAS_CAL_ENABLE) \
 	-DGYRO_PIPELINE_UART_RATE_HZ=$(GYRO_PIPELINE_UART_RATE_HZ) \
+	-DATTITUDE_ESTIMATOR_ENABLE=$(ATTITUDE_ESTIMATOR_ENABLE) \
+	-DATTITUDE_ESTIMATOR_UART_DEBUG=$(ATTITUDE_ESTIMATOR_UART_DEBUG) \
+	-DATTITUDE_ESTIMATOR_UART_RATE_HZ=$(ATTITUDE_ESTIMATOR_UART_RATE_HZ) \
+	-DATTITUDE_EULER_RATE_HZ=$(ATTITUDE_EULER_RATE_HZ) \
 	-DMEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES) \
 	-DACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW) \
 	-DACCEL_PIPELINE_DEBUG_MEDIAN=$(ACCEL_PIPELINE_DEBUG_MEDIAN) \
@@ -191,6 +216,11 @@ ifeq ($(GYRO_PIPELINE_ENABLE),1)
 SOURCES += src/gyro_pipeline.c
 endif
 
+ifeq ($(ATTITUDE_ESTIMATOR_ENABLE),1)
+SOURCES += src/imu_body_frame.c
+SOURCES += src/attitude_estimator.c
+endif
+
 OBJECTS := \
 	$(addprefix $(BUILD_DIR)/,$(notdir $(SOURCES:.c=.o)))
 
@@ -201,7 +231,8 @@ ELF := $(BUILD_DIR)/$(PROJECT).elf
 BIN := $(BUILD_DIR)/$(PROJECT).bin
 HEX := $(BUILD_DIR)/$(PROJECT).hex
 
-.PHONY: all clean size inspect test-host test-accel-host test-gyro-host FORCE
+.PHONY: all clean size inspect test-host test-accel-host test-gyro-host \
+	test-attitude-host FORCE
 
 all: $(ELF) $(BIN) $(HEX) size
 
@@ -225,6 +256,10 @@ $(CONFIG_STAMP): FORCE | $(BUILD_DIR)
 		'GYRO_PIPELINE_UART_DEBUG=$(GYRO_PIPELINE_UART_DEBUG)' \
 		'GYRO_INITIAL_BIAS_CAL_ENABLE=$(GYRO_INITIAL_BIAS_CAL_ENABLE)' \
 		'GYRO_PIPELINE_UART_RATE_HZ=$(GYRO_PIPELINE_UART_RATE_HZ)' \
+		'ATTITUDE_ESTIMATOR_ENABLE=$(ATTITUDE_ESTIMATOR_ENABLE)' \
+		'ATTITUDE_ESTIMATOR_UART_DEBUG=$(ATTITUDE_ESTIMATOR_UART_DEBUG)' \
+		'ATTITUDE_ESTIMATOR_UART_RATE_HZ=$(ATTITUDE_ESTIMATOR_UART_RATE_HZ)' \
+		'ATTITUDE_EULER_RATE_HZ=$(ATTITUDE_EULER_RATE_HZ)' \
 		'MEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES)' \
 		'ACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW)' \
 		'ACCEL_PIPELINE_DEBUG_MEDIAN=$(ACCEL_PIPELINE_DEBUG_MEDIAN)' \
@@ -260,7 +295,7 @@ size: $(ELF)
 inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(NM) -n $(ELF) | grep -E \
-		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_latest_gyro_pipeline_output|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
+		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_latest_gyro_pipeline_output|g_latest_attitude_estimator_output|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
 
 test-host:
 	mkdir -p build/host
@@ -309,6 +344,23 @@ test-gyro-host:
 		-lm \
 		-o build/host/gyro_pipeline_test
 	./build/host/gyro_pipeline_test
+
+test-attitude-host:
+	mkdir -p build/host
+	$(HOST_CC) \
+		-std=c11 \
+		-Wall \
+		-Wextra \
+		-Werror \
+		-O0 \
+		-g3 \
+		-Iinclude \
+		tests/attitude_estimator_test.c \
+		src/attitude_estimator.c \
+		src/imu_body_frame.c \
+		-lm \
+		-o build/host/attitude_estimator_test
+	./build/host/attitude_estimator_test
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -5,6 +5,10 @@
 #if GYRO_PIPELINE_ENABLE
 #include "gyro_pipeline.h"
 #endif
+#if ATTITUDE_ESTIMATOR_ENABLE
+#include "attitude_estimator.h"
+#include "imu_body_frame.h"
+#endif
 #include "imu_acquisition.h"
 #include "micros.h"
 #include "mpu9250.h"
@@ -80,6 +84,55 @@
 #if GYRO_PIPELINE_UART_DEBUG
 #define GYRO_PIPELINE_UART_PERIOD_US \
     (1000000UL / (uint32_t)GYRO_PIPELINE_UART_RATE_HZ)
+#endif
+
+#ifndef ATTITUDE_ESTIMATOR_ENABLE
+#define ATTITUDE_ESTIMATOR_ENABLE 0
+#endif
+
+#ifndef ATTITUDE_ESTIMATOR_UART_DEBUG
+#define ATTITUDE_ESTIMATOR_UART_DEBUG 0
+#endif
+
+#ifndef ATTITUDE_ESTIMATOR_UART_RATE_HZ
+#define ATTITUDE_ESTIMATOR_UART_RATE_HZ 2
+#endif
+
+#ifndef ATTITUDE_EULER_RATE_HZ
+#define ATTITUDE_EULER_RATE_HZ 100
+#endif
+
+#if ATTITUDE_ESTIMATOR_ENABLE && \
+    (!ACCEL_PIPELINE_ENABLE || !GYRO_PIPELINE_ENABLE)
+#error "Attitude estimator requires accelerometer and gyro pipelines"
+#endif
+
+#if ATTITUDE_ESTIMATOR_ENABLE && \
+    (ACCEL_CAPTURE_TEST || GYRO_CAPTURE_TEST)
+#error "Attitude estimator cannot run while a capture test owns the main loop"
+#endif
+
+#if ATTITUDE_ESTIMATOR_UART_DEBUG && \
+    !ATTITUDE_ESTIMATOR_ENABLE
+#error "ATTITUDE_ESTIMATOR_UART_DEBUG requires ATTITUDE_ESTIMATOR_ENABLE=1"
+#endif
+
+#if ATTITUDE_ESTIMATOR_ENABLE && \
+    ((ATTITUDE_EULER_RATE_HZ < 1) || \
+     (ATTITUDE_EULER_RATE_HZ > 500))
+#error "ATTITUDE_EULER_RATE_HZ must be from 1 to 500"
+#endif
+
+#if ATTITUDE_ESTIMATOR_UART_DEBUG && \
+    ((ATTITUDE_ESTIMATOR_UART_RATE_HZ < 1) || \
+     (ATTITUDE_ESTIMATOR_UART_RATE_HZ > 500))
+#error "ATTITUDE_ESTIMATOR_UART_RATE_HZ must be from 1 to 500"
+#endif
+
+#if ATTITUDE_ESTIMATOR_UART_DEBUG
+#define ATTITUDE_ESTIMATOR_UART_PERIOD_US \
+    (1000000UL / \
+     (uint32_t)ATTITUDE_ESTIMATOR_UART_RATE_HZ)
 #endif
 
 #ifndef MEASURE_PIPELINE_TIMES
@@ -162,7 +215,7 @@ volatile imu_acquisition_status_t
  *
  * Expected sample rate is about 500 Hz.
  *
- * 5 seconds Ã— 500 Hz â‰ˆ 2500 samples.
+ * 5 seconds Ãƒâ€” 500 Hz Ã¢â€°Ë† 2500 samples.
  *
  * A little extra space is reserved so timing variation
  * does not overflow the buffer.
@@ -238,6 +291,13 @@ volatile accel_pipeline_output_t
 
 volatile gyro_pipeline_output_t
     g_latest_gyro_pipeline_output;
+
+#endif
+
+#if ATTITUDE_ESTIMATOR_ENABLE
+
+volatile attitude_estimator_output_t
+    g_latest_attitude_estimator_output;
 
 #endif
 
@@ -548,6 +608,34 @@ static void gyro_uart_write_pipeline(
 
 #endif
 
+#if ATTITUDE_ESTIMATOR_UART_DEBUG
+
+static void attitude_uart_write_pipeline(
+    const attitude_estimator_output_t *output)
+{
+    (void)uart_diag_write_string("[ATT] seq=");
+    (void)uart_diag_write_uint32(output->sequence);
+
+    (void)uart_diag_write_string(" dt_us=");
+    (void)uart_diag_write_uint32(
+        output->sample_interval_us);
+
+    (void)uart_diag_write_string(" angle_deg=");
+    gyro_uart_write_float_triplet(
+        output->roll_deg,
+        output->pitch_deg,
+        output->yaw_deg);
+
+    (void)uart_diag_write_string(" amag_g=");
+    gyro_uart_write_fixed3(output->accel_magnitude_g);
+
+    (void)uart_diag_write_string(" flags=");
+    (void)uart_diag_write_hex32(output->flags);
+    (void)uart_diag_write_string("\r\n");
+}
+
+#endif
+
 #if ACQ_UART_RAW_DEBUG
 
 static void write_signed(int16_t value)
@@ -818,7 +906,7 @@ void run_accel_capture_test(void)
      * -------------------------------------------------
      * Repeat 5-second captures.
      *
-     * 240 blocks Ã— 5 seconds =
+     * 240 blocks Ãƒâ€” 5 seconds =
      * 1200 seconds =
      * 20 minutes of recorded accelerometer data.
      * -------------------------------------------------
@@ -1317,6 +1405,18 @@ int main(void)
     bool gyro_uart_timestamp_valid;
 #endif
 
+#if ATTITUDE_ESTIMATOR_ENABLE
+    imu_body_sample_t body_sample;
+    attitude_estimator_output_t attitude_output;
+    bool attitude_output_ready;
+    bool attitude_initialization_reported;
+
+#if ATTITUDE_ESTIMATOR_UART_DEBUG
+    uint32_t attitude_previous_uart_timestamp_us;
+    bool attitude_uart_timestamp_valid;
+#endif
+#endif
+
 #if MEASURE_PIPELINE_TIMES
     uint32_t pipeline_start_us;
     uint32_t pipeline_elapsed_us;
@@ -1351,7 +1451,7 @@ int main(void)
 
     /*
      * When the APB1 prescaler is not 1,
-     * STM32F103 timer clock = 2 Ã— PCLK1.
+     * STM32F103 timer clock = 2 Ãƒâ€” PCLK1.
      */
     pclk1_hz = system_clock_get_pclk1_hz();
 
@@ -1593,6 +1693,7 @@ int main(void)
 
 #if ACCEL_PIPELINE_ENABLE
     accel_pipeline_init();
+    accel_output = (accel_pipeline_output_t){0};
     g_latest_accel_pipeline_output =
         (accel_pipeline_output_t){0};
 
@@ -1607,6 +1708,7 @@ int main(void)
 #if GYRO_PIPELINE_ENABLE
     gyro_pipeline_init(
         GYRO_INITIAL_BIAS_CAL_ENABLE != 0);
+    gyro_output = (gyro_pipeline_output_t){0};
     g_latest_gyro_pipeline_output =
         (gyro_pipeline_output_t){0};
     gyro_previous_calibration_flags = 0UL;
@@ -1620,6 +1722,29 @@ int main(void)
     {
         (void)uart_diag_write_line(
             "[GYRO PIPE] validate -> bias -> dps -> rad/s");
+    }
+#endif
+
+#if ATTITUDE_ESTIMATOR_ENABLE
+    attitude_estimator_init(
+        ATTITUDE_ESTIMATOR_DEFAULT_KP,
+        (uint32_t)ATTITUDE_EULER_RATE_HZ);
+
+    g_latest_attitude_estimator_output =
+        (attitude_estimator_output_t){0};
+
+    attitude_output_ready = false;
+    attitude_initialization_reported = false;
+
+#if ATTITUDE_ESTIMATOR_UART_DEBUG
+    attitude_previous_uart_timestamp_us = 0UL;
+    attitude_uart_timestamp_valid = false;
+#endif
+
+    if (g_fc_uart_status == UART_DIAG_OK)
+    {
+        (void)uart_diag_write_line(
+            "[ATT] Waiting for gyro bias and valid gravity");
     }
 #endif
 
@@ -1868,6 +1993,65 @@ for (;;)
                         gyro_uart_timestamp_valid = true;
                     }
 #endif
+                }
+            }
+#endif
+
+#if ATTITUDE_ESTIMATOR_ENABLE
+            if ((sample.flags & IMU_RAW_MOTION_VALID) != 0UL)
+            {
+                if (imu_body_frame_from_pipeline(
+                        &accel_output,
+                        &gyro_output,
+                        &body_sample))
+                {
+                    attitude_output_ready =
+                        attitude_estimator_update(
+                            &body_sample,
+                            &attitude_output);
+
+                    g_latest_attitude_estimator_output =
+                        attitude_output;
+
+                    if (g_fc_uart_status == UART_DIAG_OK)
+                    {
+                        if (attitude_output_ready &&
+                            !attitude_initialization_reported &&
+                            ((attitude_output.flags &
+                              ATTITUDE_INITIALIZED) != 0UL))
+                        {
+                            (void)uart_diag_write_string(
+                                "[ATT] Initialized angle_deg=");
+
+                            gyro_uart_write_float_triplet(
+                                attitude_output.roll_deg,
+                                attitude_output.pitch_deg,
+                                attitude_output.yaw_deg);
+
+                            (void)uart_diag_write_line(
+                                " yaw is relative only");
+
+                            attitude_initialization_reported = true;
+                        }
+
+#if ATTITUDE_ESTIMATOR_UART_DEBUG
+                        if (attitude_output_ready &&
+                            ((!attitude_uart_timestamp_valid) ||
+                             ((uint32_t)(
+                                  attitude_output.timestamp_us -
+                                  attitude_previous_uart_timestamp_us) >=
+                              ATTITUDE_ESTIMATOR_UART_PERIOD_US)))
+                        {
+                            attitude_uart_write_pipeline(
+                                &attitude_output);
+
+                            attitude_previous_uart_timestamp_us =
+                                attitude_output.timestamp_us;
+
+                            attitude_uart_timestamp_valid = true;
+                        }
+#endif
+                    }
                 }
             }
 #endif
