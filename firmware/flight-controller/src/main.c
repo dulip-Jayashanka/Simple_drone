@@ -143,6 +143,27 @@
 #error "MEASURE_PIPELINE_TIMES requires ACCEL_PIPELINE_ENABLE=1"
 #endif
 
+#ifndef MEASURE_RAW_TO_ATTITUDE_TIMES
+#define MEASURE_RAW_TO_ATTITUDE_TIMES 0
+#endif
+
+#if MEASURE_RAW_TO_ATTITUDE_TIMES && \
+    !ATTITUDE_ESTIMATOR_ENABLE
+#error "MEASURE_RAW_TO_ATTITUDE_TIMES requires ATTITUDE_ESTIMATOR_ENABLE=1"
+#endif
+
+#if MEASURE_RAW_TO_ATTITUDE_TIMES && \
+    MEASURE_PIPELINE_TIMES
+#error "Do not enable both timing measurement modes"
+#endif
+
+#if MEASURE_RAW_TO_ATTITUDE_TIMES && \
+    (ACQ_UART_RAW_DEBUG || \
+     GYRO_PIPELINE_UART_DEBUG || \
+     ATTITUDE_ESTIMATOR_UART_DEBUG)
+#error "Raw-to-attitude timing requires continuous UART debug to be disabled"
+#endif
+
 #ifndef ACCEL_PIPELINE_DEBUG_RAW
 #define ACCEL_PIPELINE_DEBUG_RAW 0
 #endif
@@ -191,6 +212,11 @@
 #error "ACCEL_PIPELINE_DEBUG_DECIMATION must be at least 1"
 #endif
 
+#if MEASURE_RAW_TO_ATTITUDE_TIMES && \
+    ACCEL_PIPELINE_DEBUG_ACTIVE
+#error "Raw-to-attitude timing requires accelerometer UART debug to be disabled"
+#endif
+
 
 #ifndef MPU_WHO_AM_I_TEST
 #define MPU_WHO_AM_I_TEST 0
@@ -215,7 +241,7 @@ volatile imu_acquisition_status_t
  *
  * Expected sample rate is about 500 Hz.
  *
- * 5 seconds Ãƒâ€” 500 Hz Ã¢â€°Ë† 2500 samples.
+ * 5 seconds ÃƒÆ’Ã¢â‚¬â€ 500 Hz ÃƒÂ¢Ã¢â‚¬Â°Ã‹â€  2500 samples.
  *
  * A little extra space is reserved so timing variation
  * does not overflow the buffer.
@@ -312,6 +338,257 @@ volatile uint32_t g_pipeline_time_min_us;
 volatile uint32_t g_pipeline_time_max_us;
 volatile uint64_t g_pipeline_time_total_us;
 volatile uint32_t g_pipeline_time_sample_count;
+
+#endif
+
+#if MEASURE_RAW_TO_ATTITUDE_TIMES
+
+/*
+ * Ignore the first 250 valid attitude outputs after estimator startup.
+ * At 500 Hz this is approximately 0.5 seconds. This keeps startup UART
+ * messages and estimator initialization effects out of steady-state timing.
+ */
+#define RAW_TO_ATTITUDE_TIMING_WARMUP_SAMPLES 250UL
+
+typedef struct
+{
+    uint32_t last_us;
+    uint32_t min_us;
+    uint32_t max_us;
+    uint64_t total_us;
+    uint32_t sample_count;
+} raw_to_attitude_time_metric_t;
+
+typedef struct
+{
+    /* Raw sample already copied to main() through published attitude output. */
+    raw_to_attitude_time_metric_t raw_processing;
+
+    /* DATA_RDY edge through I2C acquisition and main-loop scheduling. */
+    raw_to_attitude_time_metric_t acquisition_and_scheduling;
+
+    /* Complete DATA_RDY edge through published attitude output. */
+    raw_to_attitude_time_metric_t data_ready_to_output;
+
+    /* Age of the Euler angles carried by each published attitude output. */
+    raw_to_attitude_time_metric_t euler_output_age;
+
+    uint32_t latest_sequence;
+    uint32_t latest_sample_interval_us;
+    uint32_t raw_sample_count;
+    uint32_t valid_output_count;
+    uint32_t estimator_not_ready_count;
+    uint32_t body_frame_failure_count;
+
+    uint32_t warmup_skipped_count;
+    uint32_t warmup_remaining;
+
+    /* Complete DATA_RDY-to-output latency exceeded one sample interval. */
+    uint32_t deadline_miss_count;
+
+    /* Software processing alone exceeded one sample interval. */
+    uint32_t processing_overrun_count;
+
+    uint32_t gyro_timing_warning_count;
+    uint32_t gyro_sequence_gap_count;
+
+    uint32_t euler_update_count;
+    uint32_t euler_reuse_count;
+
+    /*
+     * One-time delay from the first DATA_RDY edge after acquisition starts
+     * until the first valid attitude is published. This includes startup
+     * gyro settling and calibration when that feature is enabled.
+     */
+    uint32_t first_data_ready_timestamp_us;
+    uint32_t first_attitude_output_timestamp_us;
+    uint32_t startup_to_first_attitude_us;
+    uint32_t first_data_ready_seen;
+    uint32_t first_attitude_seen;
+} raw_to_attitude_timing_report_t;
+
+/* Complete profiler report for non-intrusive GDB inspection. */
+volatile raw_to_attitude_timing_report_t
+    g_raw_to_attitude_timing;
+
+static bool raw_to_attitude_measurement_started;
+static bool raw_to_attitude_euler_timestamp_valid;
+static uint32_t raw_to_attitude_euler_timestamp_us;
+
+static void raw_to_attitude_metric_update(
+    volatile raw_to_attitude_time_metric_t *metric,
+    uint32_t elapsed_us)
+{
+    if ((metric->sample_count == 0UL) ||
+        (elapsed_us < metric->min_us))
+    {
+        metric->min_us = elapsed_us;
+    }
+
+    if (elapsed_us > metric->max_us)
+    {
+        metric->max_us = elapsed_us;
+    }
+
+    metric->last_us = elapsed_us;
+    metric->total_us += (uint64_t)elapsed_us;
+    metric->sample_count++;
+}
+
+static void raw_to_attitude_timing_init(void)
+{
+    g_raw_to_attitude_timing =
+        (raw_to_attitude_timing_report_t){0};
+
+    raw_to_attitude_measurement_started = false;
+    raw_to_attitude_euler_timestamp_valid = false;
+    raw_to_attitude_euler_timestamp_us = 0UL;
+}
+
+static void raw_to_attitude_timing_note_raw_sample(
+    uint32_t sequence,
+    uint32_t data_ready_timestamp_us)
+{
+    g_raw_to_attitude_timing.latest_sequence = sequence;
+    g_raw_to_attitude_timing.raw_sample_count++;
+
+    if (g_raw_to_attitude_timing.first_data_ready_seen == 0UL)
+    {
+        g_raw_to_attitude_timing.first_data_ready_seen = 1UL;
+        g_raw_to_attitude_timing.first_data_ready_timestamp_us =
+            data_ready_timestamp_us;
+    }
+}
+
+static void raw_to_attitude_timing_record(
+    uint32_t sequence,
+    uint32_t data_ready_timestamp_us,
+    uint32_t raw_processing_start_us,
+    uint32_t output_timestamp_us,
+    uint32_t sample_interval_us,
+    uint32_t gyro_flags,
+    uint32_t attitude_flags,
+    bool attitude_output_ready)
+{
+    uint32_t raw_processing_us;
+    uint32_t acquisition_and_scheduling_us;
+    uint32_t data_ready_to_output_us;
+    uint32_t euler_output_age_us;
+
+    g_raw_to_attitude_timing.latest_sequence = sequence;
+    g_raw_to_attitude_timing.latest_sample_interval_us =
+        sample_interval_us;
+
+    /*
+     * Retain the sensor timestamp of the most recently calculated Euler
+     * angles, including Euler updates during the warmup interval.
+     */
+    if ((attitude_flags & ATTITUDE_EULER_UPDATED) != 0UL)
+    {
+        raw_to_attitude_euler_timestamp_us =
+            data_ready_timestamp_us;
+        raw_to_attitude_euler_timestamp_valid = true;
+    }
+
+    if (!attitude_output_ready)
+    {
+        g_raw_to_attitude_timing.estimator_not_ready_count++;
+        return;
+    }
+
+    if (g_raw_to_attitude_timing.first_attitude_seen == 0UL)
+    {
+        g_raw_to_attitude_timing.first_attitude_seen = 1UL;
+        g_raw_to_attitude_timing
+            .first_attitude_output_timestamp_us =
+            output_timestamp_us;
+        g_raw_to_attitude_timing.startup_to_first_attitude_us =
+            output_timestamp_us -
+            g_raw_to_attitude_timing
+                .first_data_ready_timestamp_us;
+    }
+
+    if (!raw_to_attitude_measurement_started)
+    {
+        raw_to_attitude_measurement_started = true;
+        g_raw_to_attitude_timing.warmup_remaining =
+            RAW_TO_ATTITUDE_TIMING_WARMUP_SAMPLES;
+    }
+
+    if (g_raw_to_attitude_timing.warmup_remaining != 0UL)
+    {
+        g_raw_to_attitude_timing.warmup_remaining--;
+        g_raw_to_attitude_timing.warmup_skipped_count++;
+        return;
+    }
+
+    /*
+     * Unsigned subtraction remains correct across the 32-bit micros() wrap
+     * because every individual measured interval is much shorter than one
+     * complete wrap period.
+     */
+    raw_processing_us =
+        output_timestamp_us - raw_processing_start_us;
+    acquisition_and_scheduling_us =
+        raw_processing_start_us - data_ready_timestamp_us;
+    data_ready_to_output_us =
+        output_timestamp_us - data_ready_timestamp_us;
+
+    raw_to_attitude_metric_update(
+        &g_raw_to_attitude_timing.raw_processing,
+        raw_processing_us);
+    raw_to_attitude_metric_update(
+        &g_raw_to_attitude_timing.acquisition_and_scheduling,
+        acquisition_and_scheduling_us);
+    raw_to_attitude_metric_update(
+        &g_raw_to_attitude_timing.data_ready_to_output,
+        data_ready_to_output_us);
+
+    g_raw_to_attitude_timing.valid_output_count++;
+
+    if (sample_interval_us != 0UL)
+    {
+        if (data_ready_to_output_us > sample_interval_us)
+        {
+            g_raw_to_attitude_timing.deadline_miss_count++;
+        }
+
+        if (raw_processing_us > sample_interval_us)
+        {
+            g_raw_to_attitude_timing.processing_overrun_count++;
+        }
+    }
+
+    if ((gyro_flags & GYRO_TIMING_WARNING) != 0UL)
+    {
+        g_raw_to_attitude_timing.gyro_timing_warning_count++;
+    }
+
+    if ((gyro_flags & GYRO_SEQUENCE_GAP) != 0UL)
+    {
+        g_raw_to_attitude_timing.gyro_sequence_gap_count++;
+    }
+
+    if ((attitude_flags & ATTITUDE_EULER_UPDATED) != 0UL)
+    {
+        g_raw_to_attitude_timing.euler_update_count++;
+    }
+    else
+    {
+        g_raw_to_attitude_timing.euler_reuse_count++;
+    }
+
+    if (raw_to_attitude_euler_timestamp_valid)
+    {
+        euler_output_age_us =
+            output_timestamp_us -
+            raw_to_attitude_euler_timestamp_us;
+
+        raw_to_attitude_metric_update(
+            &g_raw_to_attitude_timing.euler_output_age,
+            euler_output_age_us);
+    }
+}
 
 #endif
 
@@ -906,7 +1183,7 @@ void run_accel_capture_test(void)
      * -------------------------------------------------
      * Repeat 5-second captures.
      *
-     * 240 blocks Ãƒâ€” 5 seconds =
+     * 240 blocks ÃƒÆ’Ã¢â‚¬â€ 5 seconds =
      * 1200 seconds =
      * 20 minutes of recorded accelerometer data.
      * -------------------------------------------------
@@ -1422,6 +1699,11 @@ int main(void)
     uint32_t pipeline_elapsed_us;
 #endif
 
+#if MEASURE_RAW_TO_ATTITUDE_TIMES
+    uint32_t raw_to_attitude_start_us;
+    uint32_t raw_to_attitude_finish_us;
+#endif
+
 #if ACCEL_PIPELINE_DEBUG_ACTIVE
     uint32_t accel_debug_sample_count;
 #endif
@@ -1451,7 +1733,7 @@ int main(void)
 
     /*
      * When the APB1 prescaler is not 1,
-     * STM32F103 timer clock = 2 Ãƒâ€” PCLK1.
+     * STM32F103 timer clock = 2 ÃƒÆ’Ã¢â‚¬â€ PCLK1.
      */
     pclk1_hz = system_clock_get_pclk1_hz();
 
@@ -1756,6 +2038,16 @@ int main(void)
     g_pipeline_time_sample_count = 0UL;
 #endif
 
+#if MEASURE_RAW_TO_ATTITUDE_TIMES
+    raw_to_attitude_timing_init();
+
+    if (g_fc_uart_status == UART_DIAG_OK)
+    {
+        (void)uart_diag_write_line(
+            "[TIMING] Raw MPU to attitude timing enabled; inspect with GDB");
+    }
+#endif
+
 #if ACCEL_PIPELINE_DEBUG_ACTIVE
     accel_debug_sample_count = 0UL;
 #endif
@@ -1867,6 +2159,18 @@ for (;;)
              IMU_ACQUISITION_OK) &&
             imu_acquisition_get_latest(&sample))
         {
+#if MEASURE_RAW_TO_ATTITUDE_TIMES
+            /*
+             * Capture the first DATA_RDY timestamp before gyro calibration
+             * can reject body-frame samples. Then start the software-only
+             * timer once the coherent raw sample is available in main().
+             */
+            raw_to_attitude_timing_note_raw_sample(
+                sample.sequence,
+                sample.motion_timestamp_us);
+            raw_to_attitude_start_us = micros();
+#endif
+
             g_latest_raw_imu_sample = sample;
 
 #if ACCEL_PIPELINE_ENABLE
@@ -2013,6 +2317,26 @@ for (;;)
                     g_latest_attitude_estimator_output =
                         attitude_output;
 
+#if MEASURE_RAW_TO_ATTITUDE_TIMES
+                    /*
+                     * Stop immediately after publishing the attitude output.
+                     * UART work below is excluded from this sample, and the
+                     * Makefile prevents continuous debug UART from delaying
+                     * later samples while this profiler is enabled.
+                     */
+                    raw_to_attitude_finish_us = micros();
+
+                    raw_to_attitude_timing_record(
+                        sample.sequence,
+                        sample.motion_timestamp_us,
+                        raw_to_attitude_start_us,
+                        raw_to_attitude_finish_us,
+                        attitude_output.sample_interval_us,
+                        gyro_output.flags,
+                        attitude_output.flags,
+                        attitude_output_ready);
+#endif
+
                     if (g_fc_uart_status == UART_DIAG_OK)
                     {
                         if (attitude_output_ready &&
@@ -2053,6 +2377,13 @@ for (;;)
 #endif
                     }
                 }
+#if MEASURE_RAW_TO_ATTITUDE_TIMES
+                else
+                {
+                    g_raw_to_attitude_timing
+                        .body_frame_failure_count++;
+                }
+#endif
             }
 #endif
         }
