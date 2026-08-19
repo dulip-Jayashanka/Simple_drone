@@ -1,24 +1,36 @@
 PROJECT := flight-controller
 BUILD_DIR := build
+
 ACQ_UART_RAW_DEBUG ?= 0
 MPU_WHO_AM_I_TEST ?= 0
 IMU_INIT_DEBUG ?= 0
 I2C_RECOVERY_TEST ?= 0
+
 I2C_BUS_HZ ?= 400000
 IMU_MODEL ?= 9250
+
 ACCEL_CAPTURE_TEST ?= 0
 GYRO_CAPTURE_TEST ?= 0
+
 ACCEL_PIPELINE_ENABLE ?= 0
+
 GYRO_PIPELINE_ENABLE ?= 0
 GYRO_PIPELINE_UART_DEBUG ?= 0
 GYRO_INITIAL_BIAS_CAL_ENABLE ?= 0
 GYRO_PIPELINE_UART_RATE_HZ ?= 10
+
 ATTITUDE_ESTIMATOR_ENABLE ?= 0
 ATTITUDE_ESTIMATOR_UART_DEBUG ?= 0
 ATTITUDE_ESTIMATOR_UART_RATE_HZ ?= 2
 ATTITUDE_EULER_RATE_HZ ?= 100
+
+# New inner-rate-control flags.
+INNER_RATE_CONTROL_ENABLE ?= 0
+INNER_RATE_CONTROL_UART_DEBUG ?= 0
+
 MEASURE_PIPELINE_TIMES ?= 0
 MEASURE_RAW_TO_ATTITUDE_TIMES ?= 0
+
 ACCEL_PIPELINE_DEBUG_RAW ?= 0
 ACCEL_PIPELINE_DEBUG_MEDIAN ?= 0
 ACCEL_PIPELINE_DEBUG_CALIBRATED_G ?= 0
@@ -39,6 +51,8 @@ BOOLEAN_BUILD_VALUES := \
 	$(GYRO_INITIAL_BIAS_CAL_ENABLE) \
 	$(ATTITUDE_ESTIMATOR_ENABLE) \
 	$(ATTITUDE_ESTIMATOR_UART_DEBUG) \
+	$(INNER_RATE_CONTROL_ENABLE) \
+	$(INNER_RATE_CONTROL_UART_DEBUG) \
 	$(MEASURE_PIPELINE_TIMES) \
 	$(MEASURE_RAW_TO_ATTITUDE_TIMES) \
 	$(ACCEL_PIPELINE_DEBUG_RAW) \
@@ -95,6 +109,23 @@ $(error ATTITUDE_ESTIMATOR_UART_DEBUG requires ATTITUDE_ESTIMATOR_ENABLE=1)
 endif
 endif
 
+#
+# The current main.c creates imu_body_sample_t inside the attitude-estimator
+# integration block. Requiring the attitude estimator here avoids changing
+# the existing working body-frame/estimator structure during this phase.
+#
+ifeq ($(INNER_RATE_CONTROL_ENABLE),1)
+ifneq ($(ATTITUDE_ESTIMATOR_ENABLE),1)
+$(error INNER_RATE_CONTROL_ENABLE currently requires ATTITUDE_ESTIMATOR_ENABLE=1)
+endif
+endif
+
+ifeq ($(INNER_RATE_CONTROL_UART_DEBUG),1)
+ifneq ($(INNER_RATE_CONTROL_ENABLE),1)
+$(error INNER_RATE_CONTROL_UART_DEBUG requires INNER_RATE_CONTROL_ENABLE=1)
+endif
+endif
+
 ifneq ($(filter 1,$(ACCEL_CAPTURE_TEST) $(GYRO_CAPTURE_TEST)),)
 ifeq ($(GYRO_PIPELINE_ENABLE),1)
 $(error Gyro pipeline cannot run while a capture test owns the main loop)
@@ -111,12 +142,15 @@ ifeq ($(MEASURE_RAW_TO_ATTITUDE_TIMES),1)
 ifneq ($(ATTITUDE_ESTIMATOR_ENABLE),1)
 $(error MEASURE_RAW_TO_ATTITUDE_TIMES requires ATTITUDE_ESTIMATOR_ENABLE=1)
 endif
+
 ifneq ($(MEASURE_PIPELINE_TIMES),0)
 $(error Do not enable MEASURE_PIPELINE_TIMES and MEASURE_RAW_TO_ATTITUDE_TIMES together)
 endif
-ifneq ($(ACQ_UART_RAW_DEBUG)$(GYRO_PIPELINE_UART_DEBUG)$(ATTITUDE_ESTIMATOR_UART_DEBUG),000)
+
+ifneq ($(ACQ_UART_RAW_DEBUG)$(GYRO_PIPELINE_UART_DEBUG)$(ATTITUDE_ESTIMATOR_UART_DEBUG)$(INNER_RATE_CONTROL_UART_DEBUG),0000)
 $(error Raw-to-attitude timing requires all continuous UART debug outputs to be disabled)
 endif
+
 ifneq ($(filter 1,$(ACCEL_PIPELINE_DEBUG_VALUES)),)
 $(error Raw-to-attitude timing requires accelerometer UART debug outputs to be disabled)
 endif
@@ -141,7 +175,6 @@ endif
 ifeq ($(GYRO_CAPTURE_TEST)$(ACCEL_PIPELINE_ENABLE),11)
 $(warning GYRO_CAPTURE_TEST owns the main loop; accelerometer pipeline processing/debug will not run)
 endif
-
 
 VALID_IMU_MODELS := 6500 9250
 
@@ -191,6 +224,8 @@ CFLAGS := $(CPU_FLAGS) \
 	-DATTITUDE_ESTIMATOR_UART_DEBUG=$(ATTITUDE_ESTIMATOR_UART_DEBUG) \
 	-DATTITUDE_ESTIMATOR_UART_RATE_HZ=$(ATTITUDE_ESTIMATOR_UART_RATE_HZ) \
 	-DATTITUDE_EULER_RATE_HZ=$(ATTITUDE_EULER_RATE_HZ) \
+	-DINNER_RATE_CONTROL_ENABLE=$(INNER_RATE_CONTROL_ENABLE) \
+	-DINNER_RATE_CONTROL_UART_DEBUG=$(INNER_RATE_CONTROL_UART_DEBUG) \
 	-DMEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES) \
 	-DMEASURE_RAW_TO_ATTITUDE_TIMES=$(MEASURE_RAW_TO_ATTITUDE_TIMES) \
 	-DACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW) \
@@ -239,6 +274,11 @@ SOURCES += src/imu_body_frame.c
 SOURCES += src/attitude_estimator.c
 endif
 
+ifeq ($(INNER_RATE_CONTROL_ENABLE),1)
+SOURCES += src/pid.c
+SOURCES += src/rate_controller.c
+endif
+
 OBJECTS := \
 	$(addprefix $(BUILD_DIR)/,$(notdir $(SOURCES:.c=.o)))
 
@@ -250,7 +290,7 @@ BIN := $(BUILD_DIR)/$(PROJECT).bin
 HEX := $(BUILD_DIR)/$(PROJECT).hex
 
 .PHONY: all clean size inspect test-host test-accel-host test-gyro-host \
-	test-attitude-host FORCE
+	test-attitude-host test-pid-host test-rate-host FORCE
 
 all: $(ELF) $(BIN) $(HEX) size
 
@@ -278,6 +318,8 @@ $(CONFIG_STAMP): FORCE | $(BUILD_DIR)
 		'ATTITUDE_ESTIMATOR_UART_DEBUG=$(ATTITUDE_ESTIMATOR_UART_DEBUG)' \
 		'ATTITUDE_ESTIMATOR_UART_RATE_HZ=$(ATTITUDE_ESTIMATOR_UART_RATE_HZ)' \
 		'ATTITUDE_EULER_RATE_HZ=$(ATTITUDE_EULER_RATE_HZ)' \
+		'INNER_RATE_CONTROL_ENABLE=$(INNER_RATE_CONTROL_ENABLE)' \
+		'INNER_RATE_CONTROL_UART_DEBUG=$(INNER_RATE_CONTROL_UART_DEBUG)' \
 		'MEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES)' \
 		'MEASURE_RAW_TO_ATTITUDE_TIMES=$(MEASURE_RAW_TO_ATTITUDE_TIMES)' \
 		'ACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW)' \
@@ -314,7 +356,7 @@ size: $(ELF)
 inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(NM) -n $(ELF) | grep -E \
-		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|g_latest_raw_imu_sample|g_latest_gyro_pipeline_output|g_latest_attitude_estimator_output|g_raw_to_attitude_timing|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
+		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|rate_controller_update|g_latest_raw_imu_sample|g_latest_gyro_pipeline_output|g_latest_attitude_estimator_output|g_latest_rate_controller_output|g_raw_to_attitude_timing|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
 
 test-host:
 	mkdir -p build/host
@@ -380,6 +422,39 @@ test-attitude-host:
 		-lm \
 		-o build/host/attitude_estimator_test
 	./build/host/attitude_estimator_test
+
+test-pid-host:
+	mkdir -p build/host
+	$(HOST_CC) \
+		-std=c11 \
+		-Wall \
+		-Wextra \
+		-Werror \
+		-O0 \
+		-g3 \
+		-Iinclude \
+		tests/pid_test.c \
+		src/pid.c \
+		-lm \
+		-o build/host/pid_test
+	./build/host/pid_test
+
+test-rate-host:
+	mkdir -p build/host
+	$(HOST_CC) \
+		-std=c11 \
+		-Wall \
+		-Wextra \
+		-Werror \
+		-O0 \
+		-g3 \
+		-Iinclude \
+		tests/rate_controller_test.c \
+		src/rate_controller.c \
+		src/pid.c \
+		-lm \
+		-o build/host/rate_controller_test
+	./build/host/rate_controller_test
 
 clean:
 	rm -rf $(BUILD_DIR)
