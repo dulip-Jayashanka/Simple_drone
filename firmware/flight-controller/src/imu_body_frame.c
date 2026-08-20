@@ -1,10 +1,18 @@
 #include "imu_body_frame.h"
 
 /*
- * The physical roll and pitch tests established that sensor X and Y rates
- * have the opposite sign from the selected body axes. A rigid right-handed
- * 180-degree rotation about Z therefore maps (-X, -Y, +Z). The identical
- * rotation must be applied to accelerometer and gyroscope vectors.
+ * Physical roll and pitch tests established the component signs used by
+ * the current body-frame conversion. Apply the same mapping to both
+ * accelerometer and gyroscope vectors so estimator attitude and measured
+ * body rates use the same convention:
+ *
+ *   sensor X -> body +X
+ *   sensor Y -> body -Y
+ *   sensor Z -> body -Z
+ *
+ * These signs are experimentally verified for roll/pitch on the current
+ * hardware. The yaw convention must be physically validated separately
+ * before the final yaw mixer signs are defined.
  */
 #define SENSOR_TO_BODY_X_SIGN ( 1.0f)
 #define SENSOR_TO_BODY_Y_SIGN (-1.0f)
