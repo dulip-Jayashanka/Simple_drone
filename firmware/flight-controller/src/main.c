@@ -17,6 +17,10 @@
 #include "rate_controller.h"
 #endif
 
+#if OUTER_ATTITUDE_CONTROL_ENABLE
+#include "attitude_controller.h"
+#endif
+
 #include "imu_acquisition.h"
 #include "micros.h"
 #include "mpu9250.h"
@@ -58,10 +62,22 @@
 #endif
 
 
+/*
+ * ============================================================
+ * ACCELEROMETER PIPELINE
+ * ============================================================
+ */
+
 #ifndef ACCEL_PIPELINE_ENABLE
 #define ACCEL_PIPELINE_ENABLE 0
 #endif
 
+
+/*
+ * ============================================================
+ * GYROSCOPE PIPELINE
+ * ============================================================
+ */
 
 #ifndef GYRO_PIPELINE_ENABLE
 #define GYRO_PIPELINE_ENABLE 0
@@ -83,12 +99,14 @@
 #endif
 
 
-#if GYRO_PIPELINE_UART_DEBUG && !GYRO_PIPELINE_ENABLE
+#if GYRO_PIPELINE_UART_DEBUG && \
+    !GYRO_PIPELINE_ENABLE
 #error "GYRO_PIPELINE_UART_DEBUG requires GYRO_PIPELINE_ENABLE=1"
 #endif
 
 
-#if GYRO_INITIAL_BIAS_CAL_ENABLE && !GYRO_PIPELINE_ENABLE
+#if GYRO_INITIAL_BIAS_CAL_ENABLE && \
+    !GYRO_PIPELINE_ENABLE
 #error "GYRO_INITIAL_BIAS_CAL_ENABLE requires GYRO_PIPELINE_ENABLE=1"
 #endif
 
@@ -107,10 +125,19 @@
 
 
 #if GYRO_PIPELINE_UART_DEBUG
+
 #define GYRO_PIPELINE_UART_PERIOD_US \
-    (1000000UL / (uint32_t)GYRO_PIPELINE_UART_RATE_HZ)
+    (1000000UL / \
+     (uint32_t)GYRO_PIPELINE_UART_RATE_HZ)
+
 #endif
 
+
+/*
+ * ============================================================
+ * ATTITUDE ESTIMATOR
+ * ============================================================
+ */
 
 #ifndef ATTITUDE_ESTIMATOR_ENABLE
 #define ATTITUDE_ESTIMATOR_ENABLE 0
@@ -133,7 +160,8 @@
 
 
 #if ATTITUDE_ESTIMATOR_ENABLE && \
-    (!ACCEL_PIPELINE_ENABLE || !GYRO_PIPELINE_ENABLE)
+    (!ACCEL_PIPELINE_ENABLE || \
+     !GYRO_PIPELINE_ENABLE)
 #error "Attitude estimator requires accelerometer and gyro pipelines"
 #endif
 
@@ -165,39 +193,32 @@
 
 
 #if ATTITUDE_ESTIMATOR_UART_DEBUG
+
 #define ATTITUDE_ESTIMATOR_UART_PERIOD_US \
     (1000000UL / \
      (uint32_t)ATTITUDE_ESTIMATOR_UART_RATE_HZ)
+
 #endif
 
 
 /*
- * ------------------------------------------------------------
+ * ============================================================
  * INNER ANGULAR-RATE CONTROL
- * ------------------------------------------------------------
+ * ============================================================
  *
- * INNER_RATE_CONTROL_ENABLE:
+ * Fast loop.
  *
- *     0 = controller is not compiled/executed
- *     1 = execute roll/pitch/yaw rate PIDs
+ * approximately 500 Hz:
  *
- * INNER_RATE_CONTROL_UART_DEBUG:
- *
- *     0 = no PID UART stream
- *     1 = transmit final roll/pitch/yaw PID outputs at 10 Hz
- *
- * For this development phase the future outer attitude controller
- * is deliberately bypassed.
- *
- * Therefore:
- *
- *     desired roll rate  = 0 rad/s
- *     desired pitch rate = 0 rad/s
- *     desired yaw rate   = 0 rad/s
- *
- * The controller therefore acts as a zero-rate sign/logic test.
- *
- * NO motor mixer or motor output is connected here.
+ * desired angular rate
+ *          -
+ * measured gyro angular rate
+ *          |
+ *          v
+ *      rate PID
+ *          |
+ *          v
+ * roll / pitch / yaw correction
  */
 
 #ifndef INNER_RATE_CONTROL_ENABLE
@@ -223,22 +244,106 @@
 
 
 /*
- * Rate PID executes for every accepted body/gyro sample.
+ * Controller runs with every valid gyro sample.
  *
- * UART is intentionally much slower so that debug printing does not
- * occur at the approximately 500 Hz control rate.
+ * UART remains much slower.
  */
 #if INNER_RATE_CONTROL_UART_DEBUG
-#define INNER_RATE_CONTROL_UART_PERIOD_US 100000UL
+
+#define INNER_RATE_CONTROL_UART_PERIOD_US \
+    100000UL
+
 #endif
 
+
+/*
+ * ============================================================
+ * OUTER ATTITUDE CONTROL
+ * ============================================================
+ *
+ * Slower roll/pitch loop.
+ *
+ * target angle
+ *      -
+ * estimated angle
+ *      |
+ *      v
+ * angle error
+ *      |
+ *      v
+ * proportional attitude gain
+ *      |
+ *      v
+ * desired angular rate
+ *      |
+ *      v
+ * rate limit
+ *      |
+ *      v
+ * held rate setpoint for inner PID
+ *
+ *
+ * Yaw heading control is intentionally NOT implemented here.
+ *
+ * The yaw inner PID continues to receive a direct yaw-rate
+ * setpoint.
+ */
+
+#ifndef OUTER_ATTITUDE_CONTROL_ENABLE
+#define OUTER_ATTITUDE_CONTROL_ENABLE 0
+#endif
+
+
+#ifndef OUTER_ATTITUDE_CONTROL_UART_DEBUG
+#define OUTER_ATTITUDE_CONTROL_UART_DEBUG 0
+#endif
+
+
+#if OUTER_ATTITUDE_CONTROL_ENABLE && \
+    !ATTITUDE_ESTIMATOR_ENABLE
+#error "Outer attitude control requires ATTITUDE_ESTIMATOR_ENABLE=1"
+#endif
+
+
+#if OUTER_ATTITUDE_CONTROL_ENABLE && \
+    !INNER_RATE_CONTROL_ENABLE
+#error "Outer attitude control requires INNER_RATE_CONTROL_ENABLE=1"
+#endif
+
+
+#if OUTER_ATTITUDE_CONTROL_UART_DEBUG && \
+    !OUTER_ATTITUDE_CONTROL_ENABLE
+#error "OUTER_ATTITUDE_CONTROL_UART_DEBUG requires OUTER_ATTITUDE_CONTROL_ENABLE=1"
+#endif
+
+
+/*
+ * Outer control runs on fresh Euler estimates,
+ * normally approximately 100 Hz.
+ *
+ * UART output is intentionally only 2 Hz.
+ */
+#if OUTER_ATTITUDE_CONTROL_UART_DEBUG
+
+#define OUTER_ATTITUDE_CONTROL_UART_PERIOD_US \
+    500000UL
+
+#endif
+
+
+/*
+ * ============================================================
+ * EXECUTION-TIME MEASUREMENT
+ * ============================================================
+ */
 
 #ifndef MEASURE_PIPELINE_TIMES
 #define MEASURE_PIPELINE_TIMES 0
 #endif
 
 
-#if MEASURE_PIPELINE_TIMES && !ACCEL_PIPELINE_ENABLE
+#if MEASURE_PIPELINE_TIMES && \
+    !ACCEL_PIPELINE_ENABLE
 #error "MEASURE_PIPELINE_TIMES requires ACCEL_PIPELINE_ENABLE=1"
 #endif
 
@@ -261,10 +366,10 @@
 
 
 /*
- * Keep the meaning of the existing raw-to-attitude profiler unchanged.
+ * Keep existing raw-to-attitude profiler meaning unchanged.
  *
- * The new inner rate controller adds execution time to the sensor path.
- * A separate raw-to-rate-control profiler can be added later.
+ * Inner/outer control adds additional work and therefore must
+ * not be enabled during the existing estimator-only timing test.
  */
 #if MEASURE_RAW_TO_ATTITUDE_TIMES && \
     INNER_RATE_CONTROL_ENABLE
@@ -276,10 +381,17 @@
     (ACQ_UART_RAW_DEBUG || \
      GYRO_PIPELINE_UART_DEBUG || \
      ATTITUDE_ESTIMATOR_UART_DEBUG || \
-     INNER_RATE_CONTROL_UART_DEBUG)
+     INNER_RATE_CONTROL_UART_DEBUG || \
+     OUTER_ATTITUDE_CONTROL_UART_DEBUG)
 #error "Raw-to-attitude timing requires continuous UART debug to be disabled"
 #endif
 
+
+/*
+ * ============================================================
+ * ACCELEROMETER PIPELINE DEBUG
+ * ============================================================
+ */
 
 #ifndef ACCEL_PIPELINE_DEBUG_RAW
 #define ACCEL_PIPELINE_DEBUG_RAW 0
@@ -330,7 +442,8 @@
     ACCEL_PIPELINE_DEBUG_MS2)
 
 
-#if ACCEL_PIPELINE_DEBUG_ACTIVE && !ACCEL_PIPELINE_ENABLE
+#if ACCEL_PIPELINE_DEBUG_ACTIVE && \
+    !ACCEL_PIPELINE_ENABLE
 #error "Accelerometer pipeline debug requires ACCEL_PIPELINE_ENABLE=1"
 #endif
 
@@ -347,25 +460,45 @@
 #endif
 
 
+/*
+ * ============================================================
+ * MPU TEST
+ * ============================================================
+ */
+
 #ifndef MPU_WHO_AM_I_TEST
 #define MPU_WHO_AM_I_TEST 0
 #endif
 
 
+/*
+ * ============================================================
+ * GLOBAL PLATFORM STATUS
+ * ============================================================
+ */
+
 #if IMU_INIT_DEBUG
-mpu_init_diag_t init_diag;
-i2c1_diag_t i2c_diag;
+
+mpu_init_diag_t
+    init_diag;
+
+i2c1_diag_t
+    i2c_diag;
+
 #endif
 
 
 volatile system_clock_status_t
     g_fc_clock_status;
 
+
 volatile system_time_status_t
     g_fc_time_status;
 
+
 volatile micros_status_t
     g_fc_micros_status;
+
 
 volatile uart_diag_status_t
     g_fc_uart_status;
@@ -376,22 +509,21 @@ volatile imu_acquisition_status_t
 
 
 /*
- * ------------------------------------------------------------
- * ACCELEROMETER CAPTURE TEST
- * ------------------------------------------------------------
+ * ============================================================
+ * ACCEL CAPTURE BUFFER
+ * ============================================================
  */
 
 #if ACCEL_CAPTURE_TEST
 
-#define ACCEL_CAPTURE_DURATION_US  5000000UL
-#define ACCEL_CAPTURE_MAX_SAMPLES 2600UL
+#define ACCEL_CAPTURE_DURATION_US \
+    5000000UL
 
-/*
- * 20 minutes:
- *
- *     240 x 5 seconds = 1200 seconds
- */
-#define ACCEL_CAPTURE_TOTAL_BLOCKS 240UL
+#define ACCEL_CAPTURE_MAX_SAMPLES \
+    2600UL
+
+#define ACCEL_CAPTURE_TOTAL_BLOCKS \
+    240UL
 
 
 typedef struct
@@ -399,6 +531,7 @@ typedef struct
     int16_t x;
     int16_t y;
     int16_t z;
+
 } accel_capture_sample_t;
 
 
@@ -414,17 +547,21 @@ static uint32_t
 
 
 /*
- * ------------------------------------------------------------
- * GYROSCOPE CAPTURE TEST
- * ------------------------------------------------------------
+ * ============================================================
+ * GYRO CAPTURE BUFFER
+ * ============================================================
  */
 
 #if GYRO_CAPTURE_TEST
 
-#define GYRO_CAPTURE_DURATION_US  5000000UL
-#define GYRO_CAPTURE_MAX_SAMPLES 2600UL
+#define GYRO_CAPTURE_DURATION_US \
+    5000000UL
 
-#define GYRO_CAPTURE_TOTAL_BLOCKS 240UL
+#define GYRO_CAPTURE_MAX_SAMPLES \
+    2600UL
+
+#define GYRO_CAPTURE_TOTAL_BLOCKS \
+    240UL
 
 
 typedef struct
@@ -432,6 +569,7 @@ typedef struct
     int16_t x;
     int16_t y;
     int16_t z;
+
 } gyro_capture_sample_t;
 
 
@@ -447,9 +585,9 @@ static uint32_t
 
 
 /*
- * ------------------------------------------------------------
- * GLOBAL DEBUG / GDB OUTPUT STATE
- * ------------------------------------------------------------
+ * ============================================================
+ * LATEST PUBLISHED DATA
+ * ============================================================
  */
 
 volatile imu_raw_sample_t
@@ -485,80 +623,65 @@ volatile attitude_estimator_output_t
 
 
 /*
- * ------------------------------------------------------------
- * INNER RATE CONTROLLER GLOBAL OUTPUT
- * ------------------------------------------------------------
+ * ============================================================
+ * INNER RATE CONTROLLER
+ * ============================================================
  */
 
 #if INNER_RATE_CONTROL_ENABLE
 
-/*
- * Latest complete inner-rate-controller output.
- *
- * Inspect through GDB without enabling UART:
- *
- *     p g_latest_rate_controller_output
- *
- * or:
- *
- *     p g_latest_rate_controller_output.roll.output
- *     p g_latest_rate_controller_output.pitch.output
- *     p g_latest_rate_controller_output.yaw.output
- */
 volatile rate_controller_output_t
     g_latest_rate_controller_output;
 
 
 /*
  * ------------------------------------------------------------
- * TEMPORARY INNER-RATE SIGN-TEST PARAMETERS
+ * TEMPORARY INNER-RATE TEST PARAMETERS
  * ------------------------------------------------------------
  *
- * IMPORTANT:
+ * NOT FLIGHT-TUNED GAINS.
  *
- * These are NOT flight-tuned PID gains.
+ * Kp = 1
+ * Ki = 0
+ * Kd = 0
  *
- * Kp=1, Ki=0, Kd=0 is selected only because:
+ * makes the first test easy to understand:
  *
- *     error = desired_rate - measured_rate
- *
- * with desired_rate = 0:
- *
- *     error = -measured_rate
- *
- * and Kp=1 makes:
- *
- *     output approximately = -measured_rate
- *
- * This makes physical sign checking easy.
+ *     output approximately equals rate error.
  */
 
-#define INNER_RATE_TEST_KP              1.0f
-#define INNER_RATE_TEST_KI              0.0f
-#define INNER_RATE_TEST_KD              0.0f
+#define INNER_RATE_TEST_KP \
+    1.0f
 
-#define INNER_RATE_TEST_INTEGRAL_LIMIT  1.0f
-#define INNER_RATE_TEST_OUTPUT_LIMIT    4.0f
+#define INNER_RATE_TEST_KI \
+    0.0f
 
-/*
- * D filtering exists in pid.c.
- *
- * Kd is currently zero, therefore this cutoff does not affect
- * this first P-only sign test.
- */
-#define INNER_RATE_TEST_D_CUTOFF_HZ    30.0f
+#define INNER_RATE_TEST_KD \
+    0.0f
+
+#define INNER_RATE_TEST_INTEGRAL_LIMIT \
+    1.0f
+
+#define INNER_RATE_TEST_OUTPUT_LIMIT \
+    4.0f
+
+#define INNER_RATE_TEST_D_CUTOFF_HZ \
+    30.0f
 
 
-static void inner_rate_load_sign_test_config(
+static void
+inner_rate_load_sign_test_config(
     rate_controller_config_t *config)
 {
     pid_config_t axis;
+
 
     if (config ==
         (rate_controller_config_t *)0)
     {
         return;
     }
+
 
     axis.kp =
         INNER_RATE_TEST_KP;
@@ -588,23 +711,23 @@ static void inner_rate_load_sign_test_config(
         INNER_RATE_TEST_D_CUTOFF_HZ;
 
 
-    /*
-     * Initial sign test uses the same temporary
-     * configuration for all three axes.
-     *
-     * Real roll/pitch/yaw gains will later be tuned
-     * independently.
-     */
-    config->roll = axis;
-    config->pitch = axis;
-    config->yaw = axis;
+    config->roll =
+        axis;
+
+    config->pitch =
+        axis;
+
+    config->yaw =
+        axis;
 }
 
 
-static bool inner_rate_source_is_valid(
+static bool
+inner_rate_source_is_valid(
     const imu_body_sample_t *body)
 {
     uint32_t required_flags;
+
 
     if (body ==
         (const imu_body_sample_t *)0)
@@ -612,20 +735,16 @@ static bool inner_rate_source_is_valid(
         return false;
     }
 
-    /*
-     * Inner PID requires:
-     *
-     * 1. valid processed gyro measurement
-     * 2. completed bias initialization
-     * 3. valid measured dt
-     */
+
     required_flags =
         GYRO_PIPELINE_VALID |
         GYRO_BIAS_READY |
         GYRO_DT_VALID;
 
+
     return
-        (body->gyro_flags & required_flags) ==
+        (body->gyro_flags &
+         required_flags) ==
         required_flags;
 }
 
@@ -633,9 +752,89 @@ static bool inner_rate_source_is_valid(
 
 
 /*
+ * ============================================================
+ * OUTER ATTITUDE CONTROLLER
+ * ============================================================
+ */
+
+#if OUTER_ATTITUDE_CONTROL_ENABLE
+
+volatile attitude_controller_output_t
+    g_latest_attitude_controller_output;
+
+
+/*
  * ------------------------------------------------------------
- * EXISTING PIPELINE EXECUTION-TIME PROFILER
+ * TEMPORARY LEVEL-HOLD TEST PARAMETERS
  * ------------------------------------------------------------
+ *
+ * NOT FLIGHT-TUNED VALUES.
+ *
+ * gain = 1 / second
+ *
+ * gives:
+ *
+ *     desired rate rad/s =
+ *         angle error rad
+ *
+ * which makes sign checking easy.
+ */
+
+#define OUTER_ATTITUDE_TEST_ROLL_GAIN_PER_S \
+    1.0f
+
+#define OUTER_ATTITUDE_TEST_PITCH_GAIN_PER_S \
+    1.0f
+
+
+/*
+ * 1 rad/s is approximately 57.3 degrees/s.
+ *
+ * Diagnostic rate cap only.
+ *
+ * It is NOT the final flight rate limit.
+ */
+#define OUTER_ATTITUDE_TEST_MAX_ROLL_RATE_RAD_S \
+    1.0f
+
+#define OUTER_ATTITUDE_TEST_MAX_PITCH_RATE_RAD_S \
+    1.0f
+
+
+static void
+outer_attitude_load_level_test_config(
+    attitude_controller_config_t *config)
+{
+    if (config ==
+        (attitude_controller_config_t *)0)
+    {
+        return;
+    }
+
+
+    config->roll_gain_per_s =
+        OUTER_ATTITUDE_TEST_ROLL_GAIN_PER_S;
+
+
+    config->pitch_gain_per_s =
+        OUTER_ATTITUDE_TEST_PITCH_GAIN_PER_S;
+
+
+    config->max_roll_rate_rad_s =
+        OUTER_ATTITUDE_TEST_MAX_ROLL_RATE_RAD_S;
+
+
+    config->max_pitch_rate_rad_s =
+        OUTER_ATTITUDE_TEST_MAX_PITCH_RATE_RAD_S;
+}
+
+#endif
+
+
+/*
+ * ============================================================
+ * ACCEL PIPELINE EXECUTION-TIME PROFILER
+ * ============================================================
  */
 
 #if MEASURE_PIPELINE_TIMES
@@ -659,14 +858,15 @@ volatile uint32_t
 
 
 /*
- * ------------------------------------------------------------
- * RAW MPU -> ATTITUDE PROFILER
- * ------------------------------------------------------------
+ * ============================================================
+ * RAW -> ATTITUDE PROFILER
+ * ============================================================
  */
 
 #if MEASURE_RAW_TO_ATTITUDE_TIMES
 
-#define RAW_TO_ATTITUDE_TIMING_WARMUP_SAMPLES 250UL
+#define RAW_TO_ATTITUDE_TIMING_WARMUP_SAMPLES \
+    250UL
 
 
 typedef struct
@@ -678,6 +878,7 @@ typedef struct
     uint64_t total_us;
 
     uint32_t sample_count;
+
 } raw_to_attitude_time_metric_t;
 
 
@@ -696,37 +897,51 @@ typedef struct
         euler_output_age;
 
 
-    uint32_t latest_sequence;
+    uint32_t
+        latest_sequence;
 
-    uint32_t latest_sample_interval_us;
+    uint32_t
+        latest_sample_interval_us;
 
-    uint32_t raw_sample_count;
+    uint32_t
+        raw_sample_count;
 
-    uint32_t valid_output_count;
+    uint32_t
+        valid_output_count;
 
-    uint32_t estimator_not_ready_count;
+    uint32_t
+        estimator_not_ready_count;
 
-    uint32_t body_frame_failure_count;
-
-
-    uint32_t warmup_skipped_count;
-
-    uint32_t warmup_remaining;
-
-
-    uint32_t deadline_miss_count;
-
-    uint32_t processing_overrun_count;
+    uint32_t
+        body_frame_failure_count;
 
 
-    uint32_t gyro_timing_warning_count;
+    uint32_t
+        warmup_skipped_count;
 
-    uint32_t gyro_sequence_gap_count;
+    uint32_t
+        warmup_remaining;
 
 
-    uint32_t euler_update_count;
+    uint32_t
+        deadline_miss_count;
 
-    uint32_t euler_reuse_count;
+    uint32_t
+        processing_overrun_count;
+
+
+    uint32_t
+        gyro_timing_warning_count;
+
+    uint32_t
+        gyro_sequence_gap_count;
+
+
+    uint32_t
+        euler_update_count;
+
+    uint32_t
+        euler_reuse_count;
 
 
     uint32_t
@@ -763,7 +978,8 @@ static uint32_t
     raw_to_attitude_euler_timestamp_us;
 
 
-static void raw_to_attitude_metric_update(
+static void
+raw_to_attitude_metric_update(
     volatile raw_to_attitude_time_metric_t *metric,
     uint32_t elapsed_us)
 {
@@ -786,14 +1002,17 @@ static void raw_to_attitude_metric_update(
     metric->last_us =
         elapsed_us;
 
+
     metric->total_us +=
         (uint64_t)elapsed_us;
+
 
     metric->sample_count++;
 }
 
 
-static void raw_to_attitude_timing_init(void)
+static void
+raw_to_attitude_timing_init(void)
 {
     g_raw_to_attitude_timing =
         (raw_to_attitude_timing_report_t){0};
@@ -802,29 +1021,37 @@ static void raw_to_attitude_timing_init(void)
     raw_to_attitude_measurement_started =
         false;
 
+
     raw_to_attitude_euler_timestamp_valid =
         false;
+
 
     raw_to_attitude_euler_timestamp_us =
         0UL;
 }
 
 
-static void raw_to_attitude_timing_note_raw_sample(
+static void
+raw_to_attitude_timing_note_raw_sample(
     uint32_t sequence,
     uint32_t data_ready_timestamp_us)
 {
-    g_raw_to_attitude_timing.latest_sequence =
+    g_raw_to_attitude_timing
+        .latest_sequence =
         sequence;
 
-    g_raw_to_attitude_timing.raw_sample_count++;
+
+    g_raw_to_attitude_timing
+        .raw_sample_count++;
 
 
     if (g_raw_to_attitude_timing
             .first_data_ready_seen == 0UL)
     {
         g_raw_to_attitude_timing
-            .first_data_ready_seen = 1UL;
+            .first_data_ready_seen =
+            1UL;
+
 
         g_raw_to_attitude_timing
             .first_data_ready_timestamp_us =
@@ -833,7 +1060,8 @@ static void raw_to_attitude_timing_note_raw_sample(
 }
 
 
-static void raw_to_attitude_timing_record(
+static void
+raw_to_attitude_timing_record(
     uint32_t sequence,
     uint32_t data_ready_timestamp_us,
     uint32_t raw_processing_start_us,
@@ -843,7 +1071,8 @@ static void raw_to_attitude_timing_record(
     uint32_t attitude_flags,
     bool attitude_output_ready)
 {
-    uint32_t raw_processing_us;
+    uint32_t
+        raw_processing_us;
 
     uint32_t
         acquisition_and_scheduling_us;
@@ -855,8 +1084,10 @@ static void raw_to_attitude_timing_record(
         euler_output_age_us;
 
 
-    g_raw_to_attitude_timing.latest_sequence =
+    g_raw_to_attitude_timing
+        .latest_sequence =
         sequence;
+
 
     g_raw_to_attitude_timing
         .latest_sample_interval_us =
@@ -868,6 +1099,7 @@ static void raw_to_attitude_timing_record(
     {
         raw_to_attitude_euler_timestamp_us =
             data_ready_timestamp_us;
+
 
         raw_to_attitude_euler_timestamp_valid =
             true;
@@ -887,11 +1119,14 @@ static void raw_to_attitude_timing_record(
             .first_attitude_seen == 0UL)
     {
         g_raw_to_attitude_timing
-            .first_attitude_seen = 1UL;
+            .first_attitude_seen =
+            1UL;
+
 
         g_raw_to_attitude_timing
             .first_attitude_output_timestamp_us =
             output_timestamp_us;
+
 
         g_raw_to_attitude_timing
             .startup_to_first_attitude_us =
@@ -906,6 +1141,7 @@ static void raw_to_attitude_timing_record(
         raw_to_attitude_measurement_started =
             true;
 
+
         g_raw_to_attitude_timing
             .warmup_remaining =
             RAW_TO_ATTITUDE_TIMING_WARMUP_SAMPLES;
@@ -917,6 +1153,7 @@ static void raw_to_attitude_timing_record(
     {
         g_raw_to_attitude_timing
             .warmup_remaining--;
+
 
         g_raw_to_attitude_timing
             .warmup_skipped_count++;
@@ -1028,20 +1265,21 @@ static void raw_to_attitude_timing_record(
 
 
 /*
- * ------------------------------------------------------------
- * ACCELEROMETER UART DEBUG HELPERS
- * ------------------------------------------------------------
+ * ============================================================
+ * ACCEL UART HELPERS
+ * ============================================================
  */
 
 #if ACCEL_PIPELINE_DEBUG_ACTIVE
 
-
 #if ACCEL_PIPELINE_DEBUG_INT_ACTIVE
 
-static void accel_debug_write_signed(
+static void
+accel_debug_write_signed(
     int16_t value)
 {
     int32_t wide;
+
 
     wide =
         (int32_t)value;
@@ -1049,7 +1287,8 @@ static void accel_debug_write_signed(
 
     if (wide < 0)
     {
-        (void)uart_diag_write_char('-');
+        (void)uart_diag_write_char(
+            '-');
 
         wide =
             -wide;
@@ -1065,13 +1304,13 @@ static void accel_debug_write_signed(
 
 #if ACCEL_PIPELINE_DEBUG_FLOAT_ACTIVE
 
-static void accel_debug_write_fixed3(
+static void
+accel_debug_write_fixed3(
     float value)
 {
     int32_t scaled;
 
     uint32_t magnitude;
-
     uint32_t fraction;
 
 
@@ -1093,7 +1332,8 @@ static void accel_debug_write_fixed3(
 
     if (scaled < 0)
     {
-        (void)uart_diag_write_char('-');
+        (void)uart_diag_write_char(
+            '-');
 
         magnitude =
             (uint32_t)(-scaled);
@@ -1108,7 +1348,9 @@ static void accel_debug_write_fixed3(
     (void)uart_diag_write_uint32(
         magnitude / 1000UL);
 
-    (void)uart_diag_write_char('.');
+
+    (void)uart_diag_write_char(
+        '.');
 
 
     fraction =
@@ -1117,13 +1359,15 @@ static void accel_debug_write_fixed3(
 
     if (fraction < 100UL)
     {
-        (void)uart_diag_write_char('0');
+        (void)uart_diag_write_char(
+            '0');
     }
 
 
     if (fraction < 10UL)
     {
-        (void)uart_diag_write_char('0');
+        (void)uart_diag_write_char(
+            '0');
     }
 
 
@@ -1136,20 +1380,26 @@ static void accel_debug_write_fixed3(
 
 #if ACCEL_PIPELINE_DEBUG_INT_ACTIVE
 
-static void accel_debug_write_i16_triplet(
+static void
+accel_debug_write_i16_triplet(
     int16_t x,
     int16_t y,
     int16_t z)
 {
-    accel_debug_write_signed(x);
+    accel_debug_write_signed(
+        x);
 
-    (void)uart_diag_write_char(',');
+    (void)uart_diag_write_char(
+        ',');
 
-    accel_debug_write_signed(y);
+    accel_debug_write_signed(
+        y);
 
-    (void)uart_diag_write_char(',');
+    (void)uart_diag_write_char(
+        ',');
 
-    accel_debug_write_signed(z);
+    accel_debug_write_signed(
+        z);
 }
 
 #endif
@@ -1157,26 +1407,33 @@ static void accel_debug_write_i16_triplet(
 
 #if ACCEL_PIPELINE_DEBUG_FLOAT_ACTIVE
 
-static void accel_debug_write_float_triplet(
+static void
+accel_debug_write_float_triplet(
     float x,
     float y,
     float z)
 {
-    accel_debug_write_fixed3(x);
+    accel_debug_write_fixed3(
+        x);
 
-    (void)uart_diag_write_char(',');
+    (void)uart_diag_write_char(
+        ',');
 
-    accel_debug_write_fixed3(y);
+    accel_debug_write_fixed3(
+        y);
 
-    (void)uart_diag_write_char(',');
+    (void)uart_diag_write_char(
+        ',');
 
-    accel_debug_write_fixed3(z);
+    accel_debug_write_fixed3(
+        z);
 }
 
 #endif
 
 
-static void accel_debug_write_pipeline(
+static void
+accel_debug_write_pipeline(
     const accel_pipeline_output_t *output)
 {
     (void)uart_diag_write_string(
@@ -1272,20 +1529,20 @@ static void accel_debug_write_pipeline(
 
 
 /*
- * ------------------------------------------------------------
- * GYROSCOPE UART HELPERS
- * ------------------------------------------------------------
+ * ============================================================
+ * GYRO UART HELPERS
+ * ============================================================
  */
 
 #if GYRO_PIPELINE_ENABLE
 
-static void gyro_uart_write_fixed3(
+static void
+gyro_uart_write_fixed3(
     float value)
 {
     int32_t scaled;
 
     uint32_t magnitude;
-
     uint32_t fraction;
 
 
@@ -1307,7 +1564,8 @@ static void gyro_uart_write_fixed3(
 
     if (scaled < 0)
     {
-        (void)uart_diag_write_char('-');
+        (void)uart_diag_write_char(
+            '-');
 
         magnitude =
             (uint32_t)(-scaled);
@@ -1322,7 +1580,9 @@ static void gyro_uart_write_fixed3(
     (void)uart_diag_write_uint32(
         magnitude / 1000UL);
 
-    (void)uart_diag_write_char('.');
+
+    (void)uart_diag_write_char(
+        '.');
 
 
     fraction =
@@ -1331,13 +1591,15 @@ static void gyro_uart_write_fixed3(
 
     if (fraction < 100UL)
     {
-        (void)uart_diag_write_char('0');
+        (void)uart_diag_write_char(
+            '0');
     }
 
 
     if (fraction < 10UL)
     {
-        (void)uart_diag_write_char('0');
+        (void)uart_diag_write_char(
+            '0');
     }
 
 
@@ -1346,24 +1608,31 @@ static void gyro_uart_write_fixed3(
 }
 
 
-static void gyro_uart_write_float_triplet(
+static void
+gyro_uart_write_float_triplet(
     float x,
     float y,
     float z)
 {
-    gyro_uart_write_fixed3(x);
+    gyro_uart_write_fixed3(
+        x);
 
-    (void)uart_diag_write_char(',');
+    (void)uart_diag_write_char(
+        ',');
 
-    gyro_uart_write_fixed3(y);
+    gyro_uart_write_fixed3(
+        y);
 
-    (void)uart_diag_write_char(',');
+    (void)uart_diag_write_char(
+        ',');
 
-    gyro_uart_write_fixed3(z);
+    gyro_uart_write_fixed3(
+        z);
 }
 
 
-static void gyro_uart_report_calibration_state(
+static void
+gyro_uart_report_calibration_state(
     const gyro_pipeline_output_t *output,
     uint32_t previous_flags)
 {
@@ -1406,6 +1675,7 @@ static void gyro_uart_report_calibration_state(
             (void)uart_diag_write_string(
                 "[GYRO CAL] Startup bias ready samples=");
 
+
             (void)uart_diag_write_uint32(
                 output->calibration_sample_count);
         }
@@ -1419,10 +1689,12 @@ static void gyro_uart_report_calibration_state(
         (void)uart_diag_write_string(
             " bias_counts=");
 
+
         gyro_uart_write_float_triplet(
             output->bias_x_counts,
             output->bias_y_counts,
             output->bias_z_counts);
+
 
         (void)uart_diag_write_string(
             "\r\n");
@@ -1432,7 +1704,8 @@ static void gyro_uart_report_calibration_state(
 
 #if GYRO_PIPELINE_UART_DEBUG
 
-static void gyro_uart_write_pipeline(
+static void
+gyro_uart_write_pipeline(
     const gyro_pipeline_output_t *output)
 {
     (void)uart_diag_write_string(
@@ -1471,6 +1744,7 @@ static void gyro_uart_write_pipeline(
     (void)uart_diag_write_hex32(
         output->flags);
 
+
     (void)uart_diag_write_string(
         "\r\n");
 }
@@ -1481,18 +1755,20 @@ static void gyro_uart_write_pipeline(
 
 
 /*
- * ------------------------------------------------------------
- * INNER RATE CONTROL UART DEBUG
- * ------------------------------------------------------------
+ * ============================================================
+ * INNER RATE UART
+ * ============================================================
  */
 
 #if INNER_RATE_CONTROL_UART_DEBUG
 
-static void inner_rate_uart_write_output(
+static void
+inner_rate_uart_write_output(
     const rate_controller_output_t *output)
 {
     (void)uart_diag_write_string(
         "[RATE PID] seq=");
+
 
     (void)uart_diag_write_uint32(
         output->sequence);
@@ -1501,11 +1777,7 @@ static void inner_rate_uart_write_output(
     (void)uart_diag_write_string(
         " out=");
 
-    /*
-     * Output order:
-     *
-     *     roll,pitch,yaw
-     */
+
     gyro_uart_write_float_triplet(
         output->roll.output,
         output->pitch.output,
@@ -1514,6 +1786,7 @@ static void inner_rate_uart_write_output(
 
     (void)uart_diag_write_string(
         " flags=");
+
 
     (void)uart_diag_write_hex32(
         output->flags);
@@ -1527,18 +1800,107 @@ static void inner_rate_uart_write_output(
 
 
 /*
- * ------------------------------------------------------------
- * ATTITUDE ESTIMATOR UART DEBUG
- * ------------------------------------------------------------
+ * ============================================================
+ * OUTER ATTITUDE UART
+ * ============================================================
+ */
+
+#if OUTER_ATTITUDE_CONTROL_UART_DEBUG
+
+static void
+outer_attitude_uart_write_pair(
+    float first,
+    float second)
+{
+    gyro_uart_write_fixed3(
+        first);
+
+    (void)uart_diag_write_char(
+        ',');
+
+    gyro_uart_write_fixed3(
+        second);
+}
+
+
+static void
+outer_attitude_uart_write_output(
+    const attitude_controller_output_t *output)
+{
+    (void)uart_diag_write_string(
+        "[ATT CTRL] seq=");
+
+
+    (void)uart_diag_write_uint32(
+        output->sequence);
+
+
+    (void)uart_diag_write_string(
+        " target_rad=");
+
+
+    outer_attitude_uart_write_pair(
+        output->desired_roll_rad,
+        output->desired_pitch_rad);
+
+
+    (void)uart_diag_write_string(
+        " angle_rad=");
+
+
+    outer_attitude_uart_write_pair(
+        output->estimated_roll_rad,
+        output->estimated_pitch_rad);
+
+
+    (void)uart_diag_write_string(
+        " error_rad=");
+
+
+    outer_attitude_uart_write_pair(
+        output->roll_error_rad,
+        output->pitch_error_rad);
+
+
+    (void)uart_diag_write_string(
+        " rate_sp=");
+
+
+    outer_attitude_uart_write_pair(
+        output->desired_roll_rate_rad_s,
+        output->desired_pitch_rate_rad_s);
+
+
+    (void)uart_diag_write_string(
+        " flags=");
+
+
+    (void)uart_diag_write_hex32(
+        output->flags);
+
+
+    (void)uart_diag_write_string(
+        "\r\n");
+}
+
+#endif
+
+
+/*
+ * ============================================================
+ * ATTITUDE UART
+ * ============================================================
  */
 
 #if ATTITUDE_ESTIMATOR_UART_DEBUG
 
-static void attitude_uart_write_pipeline(
+static void
+attitude_uart_write_pipeline(
     const attitude_estimator_output_t *output)
 {
     (void)uart_diag_write_string(
         "[ATT] seq=");
+
 
     (void)uart_diag_write_uint32(
         output->sequence);
@@ -1547,12 +1909,14 @@ static void attitude_uart_write_pipeline(
     (void)uart_diag_write_string(
         " dt_us=");
 
+
     (void)uart_diag_write_uint32(
         output->sample_interval_us);
 
 
     (void)uart_diag_write_string(
         " angle_deg=");
+
 
     gyro_uart_write_float_triplet(
         output->roll_deg,
@@ -1563,12 +1927,14 @@ static void attitude_uart_write_pipeline(
     (void)uart_diag_write_string(
         " amag_g=");
 
+
     gyro_uart_write_fixed3(
         output->accel_magnitude_g);
 
 
     (void)uart_diag_write_string(
         " flags=");
+
 
     (void)uart_diag_write_hex32(
         output->flags);
@@ -1582,17 +1948,19 @@ static void attitude_uart_write_pipeline(
 
 
 /*
- * ------------------------------------------------------------
- * RAW IMU / I2C UART DEBUG
- * ------------------------------------------------------------
+ * ============================================================
+ * RAW ACQUISITION UART
+ * ============================================================
  */
 
 #if ACQ_UART_RAW_DEBUG
 
-static void write_signed(
+static void
+write_signed(
     int16_t value)
 {
     int32_t wide;
+
 
     wide =
         (int32_t)value;
@@ -1600,7 +1968,8 @@ static void write_signed(
 
     if (wide < 0)
     {
-        (void)uart_diag_write_char('-');
+        (void)uart_diag_write_char(
+            '-');
 
         wide =
             -wide;
@@ -1612,17 +1981,21 @@ static void write_signed(
 }
 
 
-static void write_separator(void)
+static void
+write_separator(void)
 {
-    (void)uart_diag_write_char(',');
+    (void)uart_diag_write_char(
+        ',');
 }
 
 
-static void write_raw_debug_line(
+static void
+write_raw_debug_line(
     const imu_raw_sample_t *sample)
 {
     (void)uart_diag_write_string(
         "[RAW] seq=");
+
 
     (void)uart_diag_write_uint32(
         sample->sequence);
@@ -1630,6 +2003,7 @@ static void write_raw_debug_line(
 
     (void)uart_diag_write_string(
         " t_us=");
+
 
     (void)uart_diag_write_uint32(
         sample->motion_timestamp_us);
@@ -1682,12 +2056,10 @@ static void write_raw_debug_line(
 
         write_separator();
 
-
         write_signed(
             sample->mag.y);
 
         write_separator();
-
 
         write_signed(
             sample->mag.z);
@@ -1696,6 +2068,7 @@ static void write_raw_debug_line(
 
     (void)uart_diag_write_string(
         " flags=");
+
 
     (void)uart_diag_write_hex32(
         sample->flags);
@@ -1706,7 +2079,8 @@ static void write_raw_debug_line(
 }
 
 
-static void write_i2c_health_debug_line(
+static void
+write_i2c_health_debug_line(
     const i2c1_diag_t *diag)
 {
     (void)uart_diag_write_string(
@@ -1793,11 +2167,13 @@ static void write_i2c_health_debug_line(
 }
 
 
-static void write_stale_debug_line(
+static void
+write_stale_debug_line(
     const imu_raw_sample_t *sample)
 {
     (void)uart_diag_write_string(
         "[RAW STALE] seq=");
+
 
     (void)uart_diag_write_uint32(
         sample->sequence);
@@ -1806,6 +2182,7 @@ static void write_stale_debug_line(
     (void)uart_diag_write_string(
         " acq_status=");
 
+
     (void)uart_diag_write_uint32(
         (uint32_t)
         g_imu_acquisition_status);
@@ -1813,6 +2190,7 @@ static void write_stale_debug_line(
 
     (void)uart_diag_write_string(
         " driver_status=");
+
 
     (void)uart_diag_write_uint32(
         (uint32_t)
@@ -1827,13 +2205,14 @@ static void write_stale_debug_line(
 
 
 /*
- * ------------------------------------------------------------
+ * ============================================================
  * HALT HELPER
- * ------------------------------------------------------------
+ * ============================================================
  */
 
 static __attribute__((noreturn))
-void stop_with_message(
+void
+stop_with_message(
     const char *message)
 {
     if (g_fc_uart_status ==
@@ -1846,23 +2225,26 @@ void stop_with_message(
 
     for (;;)
     {
-        __asm volatile ("nop");
+        __asm volatile (
+            "nop");
     }
 }
 
 
 /*
- * ------------------------------------------------------------
- * ACCELEROMETER CAPTURE SUPPORT
- * ------------------------------------------------------------
+ * ============================================================
+ * ACCEL CAPTURE
+ * ============================================================
  */
 
 #if ACCEL_CAPTURE_TEST
 
-static void accel_capture_write_signed(
+static void
+accel_capture_write_signed(
     int16_t value)
 {
     int32_t wide;
+
 
     wide =
         (int32_t)value;
@@ -1870,7 +2252,8 @@ static void accel_capture_write_signed(
 
     if (wide < 0)
     {
-        (void)uart_diag_write_char('-');
+        (void)uart_diag_write_char(
+            '-');
 
         wide =
             -wide;
@@ -1882,7 +2265,8 @@ static void accel_capture_write_signed(
 }
 
 
-static void accel_capture_send_values(
+static void
+accel_capture_send_values(
     uint32_t block_number)
 {
     uint32_t i;
@@ -1891,12 +2275,14 @@ static void accel_capture_send_values(
     (void)uart_diag_write_string(
         "# ACCEL_CAPTURE_BEGIN block=");
 
+
     (void)uart_diag_write_uint32(
         block_number);
 
 
     (void)uart_diag_write_string(
         " samples=");
+
 
     (void)uart_diag_write_uint32(
         accel_capture_count);
@@ -1917,24 +2303,33 @@ static void accel_capture_send_values(
         (void)uart_diag_write_uint32(
             block_number);
 
-        (void)uart_diag_write_char(',');
+
+        (void)uart_diag_write_char(
+            ',');
 
 
-        (void)uart_diag_write_uint32(i);
+        (void)uart_diag_write_uint32(
+            i);
 
-        (void)uart_diag_write_char(',');
+
+        (void)uart_diag_write_char(
+            ',');
 
 
         accel_capture_write_signed(
             accel_capture_buffer[i].x);
 
-        (void)uart_diag_write_char(',');
+
+        (void)uart_diag_write_char(
+            ',');
 
 
         accel_capture_write_signed(
             accel_capture_buffer[i].y);
 
-        (void)uart_diag_write_char(',');
+
+        (void)uart_diag_write_char(
+            ',');
 
 
         accel_capture_write_signed(
@@ -1949,8 +2344,10 @@ static void accel_capture_send_values(
     (void)uart_diag_write_string(
         "# ACCEL_CAPTURE_END block=");
 
+
     (void)uart_diag_write_uint32(
         block_number);
+
 
     (void)uart_diag_write_string(
         "\r\n");
@@ -1958,14 +2355,13 @@ static void accel_capture_send_values(
 
 
 static __attribute__((noreturn))
-void run_accel_capture_test(void)
+void
+run_accel_capture_test(void)
 {
     imu_raw_sample_t sample;
 
     uint32_t start_time_us;
-
     uint32_t elapsed_us;
-
     uint32_t block_number;
 
     bool started;
@@ -1978,6 +2374,7 @@ void run_accel_capture_test(void)
     {
         accel_capture_count =
             0UL;
+
 
         start_time_us =
             0UL;
@@ -2071,7 +2468,7 @@ void run_accel_capture_test(void)
 
 
         /*
-         * Transmission happens only after this capture block.
+         * Transmission only after capture has finished.
          */
         if (g_fc_uart_status ==
             UART_DIAG_OK)
@@ -2118,17 +2515,19 @@ void run_accel_capture_test(void)
 
 
 /*
- * ------------------------------------------------------------
- * GYROSCOPE CAPTURE SUPPORT
- * ------------------------------------------------------------
+ * ============================================================
+ * GYRO CAPTURE
+ * ============================================================
  */
 
 #if GYRO_CAPTURE_TEST
 
-static void gyro_capture_write_signed(
+static void
+gyro_capture_write_signed(
     int16_t value)
 {
     int32_t wide;
+
 
     wide =
         (int32_t)value;
@@ -2136,7 +2535,8 @@ static void gyro_capture_write_signed(
 
     if (wide < 0)
     {
-        (void)uart_diag_write_char('-');
+        (void)uart_diag_write_char(
+            '-');
 
         wide =
             -wide;
@@ -2148,7 +2548,8 @@ static void gyro_capture_write_signed(
 }
 
 
-static void gyro_capture_send_values(
+static void
+gyro_capture_send_values(
     uint32_t block_number,
     uint32_t block_start_us)
 {
@@ -2158,6 +2559,7 @@ static void gyro_capture_send_values(
     (void)uart_diag_write_string(
         "# GYRO_CAPTURE_BEGIN block=");
 
+
     (void)uart_diag_write_uint32(
         block_number);
 
@@ -2165,12 +2567,14 @@ static void gyro_capture_send_values(
     (void)uart_diag_write_string(
         " samples=");
 
+
     (void)uart_diag_write_uint32(
         gyro_capture_count);
 
 
     (void)uart_diag_write_string(
         " start_us=");
+
 
     (void)uart_diag_write_uint32(
         block_start_us);
@@ -2191,24 +2595,33 @@ static void gyro_capture_send_values(
         (void)uart_diag_write_uint32(
             block_number);
 
-        (void)uart_diag_write_char(',');
+
+        (void)uart_diag_write_char(
+            ',');
 
 
-        (void)uart_diag_write_uint32(i);
+        (void)uart_diag_write_uint32(
+            i);
 
-        (void)uart_diag_write_char(',');
+
+        (void)uart_diag_write_char(
+            ',');
 
 
         gyro_capture_write_signed(
             gyro_capture_buffer[i].x);
 
-        (void)uart_diag_write_char(',');
+
+        (void)uart_diag_write_char(
+            ',');
 
 
         gyro_capture_write_signed(
             gyro_capture_buffer[i].y);
 
-        (void)uart_diag_write_char(',');
+
+        (void)uart_diag_write_char(
+            ',');
 
 
         gyro_capture_write_signed(
@@ -2223,8 +2636,10 @@ static void gyro_capture_send_values(
     (void)uart_diag_write_string(
         "# GYRO_CAPTURE_END block=");
 
+
     (void)uart_diag_write_uint32(
         block_number);
+
 
     (void)uart_diag_write_string(
         "\r\n");
@@ -2232,14 +2647,13 @@ static void gyro_capture_send_values(
 
 
 static __attribute__((noreturn))
-void run_gyro_capture_test(void)
+void
+run_gyro_capture_test(void)
 {
     imu_raw_sample_t sample;
 
     uint32_t start_time_us;
-
     uint32_t elapsed_us;
-
     uint32_t block_number;
 
     bool started;
@@ -2252,6 +2666,7 @@ void run_gyro_capture_test(void)
     {
         gyro_capture_count =
             0UL;
+
 
         start_time_us =
             0UL;
@@ -2385,14 +2800,15 @@ void run_gyro_capture_test(void)
 
 
 /*
- * ------------------------------------------------------------
- * MPU WHO_AM_I TEST
- * ------------------------------------------------------------
+ * ============================================================
+ * DIRECT MPU WHO_AM_I TEST
+ * ============================================================
  */
 
 #if MPU_WHO_AM_I_TEST
 
-static void mpu_who_am_i_test(
+static void
+mpu_who_am_i_test(
     uint32_t pclk1_hz)
 {
     uint8_t id_68 =
@@ -2421,8 +2837,10 @@ static void mpu_who_am_i_test(
     (void)uart_diag_write_string(
         "[WHO_AM_I TEST] I2C init status=");
 
+
     (void)uart_diag_write_uint32(
         (uint32_t)init_status);
+
 
     (void)uart_diag_write_string(
         "\r\n");
@@ -2457,14 +2875,18 @@ static void mpu_who_am_i_test(
     (void)uart_diag_write_string(
         "[WHO_AM_I TEST] address=0x68 status=");
 
+
     (void)uart_diag_write_uint32(
         (uint32_t)status_68);
+
 
     (void)uart_diag_write_string(
         " id_decimal=");
 
+
     (void)uart_diag_write_uint32(
         (uint32_t)id_68);
+
 
     (void)uart_diag_write_string(
         "\r\n");
@@ -2473,14 +2895,18 @@ static void mpu_who_am_i_test(
     (void)uart_diag_write_string(
         "[WHO_AM_I TEST] address=0x69 status=");
 
+
     (void)uart_diag_write_uint32(
         (uint32_t)status_69);
+
 
     (void)uart_diag_write_string(
         " id_decimal=");
 
+
     (void)uart_diag_write_uint32(
         (uint32_t)id_69);
+
 
     (void)uart_diag_write_string(
         "\r\n");
@@ -2546,11 +2972,14 @@ static void mpu_who_am_i_test(
  * ============================================================
  */
 
-int main(void)
+int
+main(void)
 {
-    uint32_t pclk1_hz;
+    uint32_t
+        pclk1_hz;
 
-    uint32_t tim2_hz;
+    uint32_t
+        tim2_hz;
 
 
 #if ACQ_UART_RAW_DEBUG
@@ -2646,7 +3075,7 @@ int main(void)
 
 /*
  * ------------------------------------------------------------
- * NEW INNER RATE CONTROLLER LOCAL STATE
+ * INNER RATE CONTROLLER LOCAL STATE
  * ------------------------------------------------------------
  */
 
@@ -2672,6 +3101,55 @@ int main(void)
 
     bool
         inner_rate_uart_timestamp_valid;
+
+#endif
+
+#endif
+
+
+/*
+ * ------------------------------------------------------------
+ * OUTER ATTITUDE CONTROLLER LOCAL STATE
+ * ------------------------------------------------------------
+ */
+
+#if OUTER_ATTITUDE_CONTROL_ENABLE
+
+    attitude_controller_config_t
+        outer_attitude_config;
+
+    attitude_controller_input_t
+        outer_attitude_input;
+
+    attitude_controller_output_t
+        outer_attitude_output;
+
+
+    bool
+        outer_attitude_output_ready;
+
+
+    /*
+     * The approximately 100 Hz outer controller writes these
+     * values.
+     *
+     * The approximately 500 Hz inner controller reads and holds
+     * them until the next fresh outer update.
+     */
+    float
+        held_roll_rate_setpoint_rad_s;
+
+    float
+        held_pitch_rate_setpoint_rad_s;
+
+
+#if OUTER_ATTITUDE_CONTROL_UART_DEBUG
+
+    uint32_t
+        outer_attitude_previous_uart_timestamp_us;
+
+    bool
+        outer_attitude_uart_timestamp_valid;
 
 #endif
 
@@ -2709,9 +3187,9 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
-     * BASIC PLATFORM INITIALIZATION
-     * --------------------------------------------------------
+     * ========================================================
+     * PLATFORM INITIALIZATION
+     * ========================================================
      */
 
     fault_record_clear();
@@ -2726,7 +3204,8 @@ int main(void)
     {
         for (;;)
         {
-            __asm volatile ("nop");
+            __asm volatile (
+                "nop");
         }
     }
 
@@ -2741,7 +3220,8 @@ int main(void)
     {
         for (;;)
         {
-            __asm volatile ("nop");
+            __asm volatile (
+                "nop");
         }
     }
 
@@ -2767,7 +3247,8 @@ int main(void)
     {
         for (;;)
         {
-            __asm volatile ("nop");
+            __asm volatile (
+                "nop");
         }
     }
 
@@ -2816,9 +3297,9 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
      * IMU ACQUISITION INITIALIZATION
-     * --------------------------------------------------------
+     * ========================================================
      */
 
     g_imu_acquisition_status =
@@ -3133,9 +3614,9 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
-     * ACCELEROMETER PIPELINE
-     * --------------------------------------------------------
+     * ========================================================
+     * ACCEL PIPELINE INITIALIZATION
+     * ========================================================
      */
 
 #if ACCEL_PIPELINE_ENABLE
@@ -3162,9 +3643,9 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
-     * GYROSCOPE PIPELINE
-     * --------------------------------------------------------
+     * ========================================================
+     * GYRO PIPELINE INITIALIZATION
+     * ========================================================
      */
 
 #if GYRO_PIPELINE_ENABLE
@@ -3208,9 +3689,9 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
-     * ATTITUDE ESTIMATOR
-     * --------------------------------------------------------
+     * ========================================================
+     * ATTITUDE ESTIMATOR INITIALIZATION
+     * ========================================================
      */
 
 #if ATTITUDE_ESTIMATOR_ENABLE
@@ -3256,16 +3737,13 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
-     * NEW INNER ANGULAR-RATE CONTROLLER
-     * --------------------------------------------------------
+     * ========================================================
+     * INNER RATE CONTROLLER INITIALIZATION
+     * ========================================================
      */
 
 #if INNER_RATE_CONTROL_ENABLE
 
-    /*
-     * Load temporary P-only sign-test configuration.
-     */
     inner_rate_load_sign_test_config(
         &inner_rate_config);
 
@@ -3313,8 +3791,21 @@ int main(void)
             "[RATE] Inner roll/pitch/yaw PID enabled");
 
 
+#if OUTER_ATTITUDE_CONTROL_ENABLE
+
+        (void)uart_diag_write_line(
+            "[RATE] Roll/pitch rate setpoints supplied by outer attitude controller");
+
+
+        (void)uart_diag_write_line(
+            "[RATE] Yaw rate setpoint remains direct 0 rad/s");
+
+#else
+
         (void)uart_diag_write_line(
             "[RATE] Outer loop bypassed; setpoint_rad_s=0,0,0");
+
+#endif
 
 
         (void)uart_diag_write_line(
@@ -3329,9 +3820,95 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
+     * ========================================================
+     * OUTER ATTITUDE CONTROLLER INITIALIZATION
+     * ========================================================
+     */
+
+#if OUTER_ATTITUDE_CONTROL_ENABLE
+
+    outer_attitude_load_level_test_config(
+        &outer_attitude_config);
+
+
+    if (!attitude_controller_init(
+            &outer_attitude_config))
+    {
+        stop_with_message(
+            "[HALT] Outer attitude controller configuration invalid");
+    }
+
+
+    outer_attitude_input =
+        (attitude_controller_input_t){0};
+
+
+    outer_attitude_output =
+        (attitude_controller_output_t){0};
+
+
+    g_latest_attitude_controller_output =
+        (attitude_controller_output_t){0};
+
+
+    outer_attitude_output_ready =
+        false;
+
+
+    /*
+     * Before the estimator supplies a valid Euler attitude,
+     * request zero roll/pitch rotation.
+     */
+    held_roll_rate_setpoint_rad_s =
+        0.0f;
+
+
+    held_pitch_rate_setpoint_rad_s =
+        0.0f;
+
+
+#if OUTER_ATTITUDE_CONTROL_UART_DEBUG
+
+    outer_attitude_previous_uart_timestamp_us =
+        0UL;
+
+
+    outer_attitude_uart_timestamp_valid =
+        false;
+
+#endif
+
+
+    if (g_fc_uart_status ==
+        UART_DIAG_OK)
+    {
+        (void)uart_diag_write_line(
+            "[ATT CTRL] Outer roll/pitch P controller enabled");
+
+
+        (void)uart_diag_write_line(
+            "[ATT CTRL] Level-hold target_rad=0,0");
+
+
+        (void)uart_diag_write_line(
+            "[ATT CTRL] Diagnostic gain=1/s rate_cap=1 rad/s");
+
+
+        (void)uart_diag_write_line(
+            "[ATT CTRL] Fresh Euler output updates held inner rate setpoints");
+
+
+        (void)uart_diag_write_line(
+            "[ATT CTRL] Yaw heading loop not implemented; yaw-rate target remains 0");
+    }
+
+#endif
+
+
+    /*
+     * ========================================================
      * PROFILER INITIALIZATION
-     * --------------------------------------------------------
+     * ========================================================
      */
 
 #if MEASURE_PIPELINE_TIMES
@@ -3339,14 +3916,18 @@ int main(void)
     g_pipeline_time_last_us =
         0UL;
 
+
     g_pipeline_time_min_us =
         0UL;
+
 
     g_pipeline_time_max_us =
         0UL;
 
+
     g_pipeline_time_total_us =
         0ULL;
+
 
     g_pipeline_time_sample_count =
         0UL;
@@ -3378,9 +3959,9 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
-     * SENSOR ID
-     * --------------------------------------------------------
+     * ========================================================
+     * SENSOR IDENTIFICATION
+     * ========================================================
      */
 
     if (g_fc_uart_status ==
@@ -3442,6 +4023,12 @@ int main(void)
 #endif
 
 
+    /*
+     * ========================================================
+     * TEST MODE BOOT MESSAGES
+     * ========================================================
+     */
+
     if (g_fc_uart_status ==
         UART_DIAG_OK)
     {
@@ -3476,9 +4063,9 @@ int main(void)
 
 
     /*
-     * --------------------------------------------------------
-     * START DATA READY ACQUISITION
-     * --------------------------------------------------------
+     * ========================================================
+     * START IMU DATA READY
+     * ========================================================
      */
 
     g_imu_acquisition_status =
@@ -3509,12 +4096,18 @@ int main(void)
 
     /*
      * ========================================================
-     * MAIN PROCESSING LOOP
+     * MAIN FLIGHT-CONTROLLER LOOP
      * ========================================================
      */
 
     for (;;)
     {
+        /*
+         * ----------------------------------------------------
+         * IMU ACQUISITION
+         * ----------------------------------------------------
+         */
+
         g_imu_acquisition_status =
             imu_acquisition_process();
 
@@ -3543,9 +4136,9 @@ int main(void)
 
 
             /*
-             * ------------------------------------------------
+             * =================================================
              * ACCELEROMETER PIPELINE
-             * ------------------------------------------------
+             * =================================================
              */
 
 #if ACCEL_PIPELINE_ENABLE
@@ -3658,9 +4251,9 @@ int main(void)
 
 
             /*
-             * ------------------------------------------------
-             * GYROSCOPE PIPELINE
-             * ------------------------------------------------
+             * =================================================
+             * GYRO PIPELINE
+             * =================================================
              */
 
 #if GYRO_PIPELINE_ENABLE
@@ -3764,11 +4357,9 @@ int main(void)
 
 
             /*
-             * ------------------------------------------------
-             * BODY-FRAME CONVERSION +
-             * ATTITUDE +
-             * INNER RATE CONTROL
-             * ------------------------------------------------
+             * =================================================
+             * BODY FRAME + CASCADED CONTROL + ATTITUDE
+             * =================================================
              */
 
 #if ATTITUDE_ESTIMATOR_ENABLE
@@ -3781,23 +4372,21 @@ int main(void)
                         &gyro_output,
                         &body_sample))
                 {
-
                     /*
-                     * -----------------------------------------
+                     * ==========================================
                      * INNER ANGULAR-RATE CONTROL
-                     * -----------------------------------------
+                     * ==========================================
                      *
-                     * This executes independently of Euler
-                     * attitude output.
+                     * Fast loop:
                      *
-                     * It uses the processed body gyro rates:
+                     * approximately 500 Hz.
                      *
-                     *     X = roll rate
-                     *     Y = pitch rate
-                     *     Z = yaw rate
+                     * When outer control is enabled:
                      *
-                     * The future outer controller is bypassed
-                     * here with direct zero-rate setpoints.
+                     * roll/pitch desired rates come from the
+                     * most recently held outer-loop output.
+                     *
+                     * Yaw remains a direct zero rate request.
                      */
 
 #if INNER_RATE_CONTROL_ENABLE
@@ -3824,7 +4413,26 @@ int main(void)
 
 
                     /*
-                     * OUTER ATTITUDE LOOP BYPASS
+                     * ------------------------------------------
+                     * DESIRED ROLL/PITCH RATE SOURCE
+                     * ------------------------------------------
+                     */
+
+#if OUTER_ATTITUDE_CONTROL_ENABLE
+
+                    inner_rate_input
+                        .desired_roll_rate_rad_s =
+                        held_roll_rate_setpoint_rad_s;
+
+
+                    inner_rate_input
+                        .desired_pitch_rate_rad_s =
+                        held_pitch_rate_setpoint_rad_s;
+
+#else
+
+                    /*
+                     * Preserve previous inner-loop-only test.
                      */
                     inner_rate_input
                         .desired_roll_rate_rad_s =
@@ -3835,14 +4443,21 @@ int main(void)
                         .desired_pitch_rate_rad_s =
                         0.0f;
 
+#endif
 
+
+                    /*
+                     * No yaw heading outer loop yet.
+                     *
+                     * Direct yaw-rate command remains zero.
+                     */
                     inner_rate_input
                         .desired_yaw_rate_rad_s =
                         0.0f;
 
 
                     /*
-                     * Real body-frame MPU6500 rates.
+                     * Real processed body-frame gyro rates.
                      */
                     inner_rate_input
                         .measured_roll_rate_rad_s =
@@ -3878,13 +4493,6 @@ int main(void)
 #endif
 
 
-                    /*
-                     * Always publish latest controller result
-                     * for GDB inspection.
-                     *
-                     * If the update was rejected, its flags
-                     * explain why no PID state was advanced.
-                     */
                     g_latest_rate_controller_output =
                         inner_rate_output;
 
@@ -3892,9 +4500,15 @@ int main(void)
 
 
                     /*
-                     * -----------------------------------------
-                     * EXISTING ATTITUDE ESTIMATOR
-                     * -----------------------------------------
+                     * ==========================================
+                     * ATTITUDE ESTIMATOR
+                     * ==========================================
+                     *
+                     * Quaternion propagation remains near
+                     * sensor rate.
+                     *
+                     * Euler roll/pitch/yaw are calculated at
+                     * ATTITUDE_EULER_RATE_HZ.
                      */
 
                     attitude_output_ready =
@@ -3908,9 +4522,206 @@ int main(void)
 
 
                     /*
-                     * -----------------------------------------
-                     * EXISTING RAW -> ATTITUDE PROFILER
-                     * -----------------------------------------
+                     * ==========================================
+                     * OUTER ROLL/PITCH ATTITUDE CONTROL
+                     * ==========================================
+                     *
+                     * Executes only on a NEW Euler angle.
+                     *
+                     * At ATTITUDE_EULER_RATE_HZ=100 this is
+                     * approximately every 10 ms.
+                     *
+                     * The output becomes the held roll/pitch
+                     * rate setpoints used by following inner
+                     * rate-control samples.
+                     */
+
+#if OUTER_ATTITUDE_CONTROL_ENABLE
+
+                    if (attitude_output_ready &&
+                        ((attitude_output.flags &
+                          (ATTITUDE_VALID |
+                           ATTITUDE_INITIALIZED)) ==
+                         (ATTITUDE_VALID |
+                          ATTITUDE_INITIALIZED)))
+                    {
+                        /*
+                         * Run outer controller only when a
+                         * fresh Euler calculation exists.
+                         */
+                        if ((attitude_output.flags &
+                             ATTITUDE_EULER_UPDATED) != 0UL)
+                        {
+                            outer_attitude_input.sequence =
+                                attitude_output.sequence;
+
+
+                            outer_attitude_input.timestamp_us =
+                                attitude_output.timestamp_us;
+
+
+                            outer_attitude_input.attitude_valid =
+                                true;
+
+
+                            /*
+                             * ----------------------------------
+                             * LEVEL-HOLD TEST SETPOINT
+                             * ----------------------------------
+                             *
+                             * Future:
+                             *
+                             * these values will come from the
+                             * movement/setpoint manager.
+                             */
+                            outer_attitude_input
+                                .desired_roll_rad =
+                                0.0f;
+
+
+                            outer_attitude_input
+                                .desired_pitch_rad =
+                                0.0f;
+
+
+                            /*
+                             * Estimated attitude feedback.
+                             */
+                            outer_attitude_input
+                                .estimated_roll_rad =
+                                attitude_output.roll_rad;
+
+
+                            outer_attitude_input
+                                .estimated_pitch_rad =
+                                attitude_output.pitch_rad;
+
+
+                            outer_attitude_output_ready =
+                                attitude_controller_update(
+                                    &outer_attitude_input,
+                                    &outer_attitude_output);
+
+
+                            /*
+                             * Publish every attempted outer
+                             * update for GDB inspection.
+                             */
+                            g_latest_attitude_controller_output =
+                                outer_attitude_output;
+
+
+                            if (outer_attitude_output_ready)
+                            {
+                                /*
+                                 * --------------------------------
+                                 * HOLD NEW RATE SETPOINTS
+                                 * --------------------------------
+                                 */
+                                held_roll_rate_setpoint_rad_s =
+                                    outer_attitude_output
+                                        .desired_roll_rate_rad_s;
+
+
+                                held_pitch_rate_setpoint_rad_s =
+                                    outer_attitude_output
+                                        .desired_pitch_rate_rad_s;
+
+
+#if OUTER_ATTITUDE_CONTROL_UART_DEBUG
+
+                                if ((g_fc_uart_status ==
+                                     UART_DIAG_OK) &&
+                                    ((!outer_attitude_uart_timestamp_valid) ||
+                                     ((uint32_t)(
+                                          outer_attitude_output.timestamp_us -
+                                          outer_attitude_previous_uart_timestamp_us) >=
+                                      OUTER_ATTITUDE_CONTROL_UART_PERIOD_US)))
+                                {
+                                    outer_attitude_uart_write_output(
+                                        &outer_attitude_output);
+
+
+                                    outer_attitude_previous_uart_timestamp_us =
+                                        outer_attitude_output.timestamp_us;
+
+
+                                    outer_attitude_uart_timestamp_valid =
+                                        true;
+                                }
+
+#endif
+                            }
+                            else
+                            {
+                                /*
+                                 * Failed calculation:
+                                 *
+                                 * do not continue using an old
+                                 * non-zero attitude-generated
+                                 * rate request.
+                                 */
+                                held_roll_rate_setpoint_rad_s =
+                                    0.0f;
+
+
+                                held_pitch_rate_setpoint_rad_s =
+                                    0.0f;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        /*
+                         * Current attitude state is not valid.
+                         *
+                         * Remove outer-generated roll/pitch
+                         * rate demands.
+                         */
+                        held_roll_rate_setpoint_rad_s =
+                            0.0f;
+
+
+                        held_pitch_rate_setpoint_rad_s =
+                            0.0f;
+
+
+                        /*
+                         * Forget outer sequence history.
+                         *
+                         * A recovered fresh Euler sample can
+                         * therefore be accepted immediately.
+                         */
+                        attitude_controller_reset();
+
+
+                        outer_attitude_output =
+                            (attitude_controller_output_t){0};
+
+
+                        outer_attitude_output.sequence =
+                            attitude_output.sequence;
+
+
+                        outer_attitude_output.timestamp_us =
+                            attitude_output.timestamp_us;
+
+
+                        outer_attitude_output.flags =
+                            ATTITUDE_CONTROL_INPUT_INVALID;
+
+
+                        g_latest_attitude_controller_output =
+                            outer_attitude_output;
+                    }
+
+#endif
+
+
+                    /*
+                     * ==========================================
+                     * EXISTING RAW -> ATTITUDE TIMING
+                     * ==========================================
                      */
 
 #if MEASURE_RAW_TO_ATTITUDE_TIMES
@@ -3934,12 +4745,9 @@ int main(void)
 
 
                     /*
-                     * -----------------------------------------
-                     * INNER RATE UART DEBUG
-                     * -----------------------------------------
-                     *
-                     * Controller itself can execute around the
-                     * sensor rate while UART is only 10 Hz.
+                     * ==========================================
+                     * INNER RATE UART
+                     * ==========================================
                      */
 
 #if INNER_RATE_CONTROL_UART_DEBUG
@@ -3969,9 +4777,9 @@ int main(void)
 
 
                     /*
-                     * -----------------------------------------
-                     * EXISTING ATTITUDE UART / INIT REPORTING
-                     * -----------------------------------------
+                     * ==========================================
+                     * ATTITUDE INITIALIZATION + UART
+                     * ==========================================
                      */
 
                     if (g_fc_uart_status ==
@@ -4042,9 +4850,9 @@ int main(void)
 
 
         /*
-         * ----------------------------------------------------
+         * ====================================================
          * ACQUISITION STATISTICS
-         * ----------------------------------------------------
+         * ====================================================
          */
 
         g_imu_acquisition_stats =
@@ -4052,9 +4860,9 @@ int main(void)
 
 
         /*
-         * ----------------------------------------------------
-         * EXISTING RAW / I2C UART DEBUG
-         * ----------------------------------------------------
+         * ====================================================
+         * RAW/I2C DEBUG
+         * ====================================================
          */
 
 #if ACQ_UART_RAW_DEBUG
@@ -4089,6 +4897,9 @@ int main(void)
                     runtime_i2c_diag.line_stuck_errors;
 
 
+                /*
+                 * Only print I2C health when the state changes.
+                 */
                 if ((i2c_error_count !=
                      previous_i2c_error_count) ||
                     (runtime_i2c_diag.recoveries !=
@@ -4132,6 +4943,7 @@ int main(void)
 #endif
 
 
-        __asm volatile ("nop");
+        __asm volatile (
+            "nop");
     }
 }
