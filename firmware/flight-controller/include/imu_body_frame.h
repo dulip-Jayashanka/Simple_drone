@@ -30,14 +30,21 @@ typedef struct
 } imu_body_sample_t;
 
 /*
- * Convert processed sensor-frame outputs into the drone body frame:
+ * Convert processed sensor-frame outputs into the drone body frame.
+ *
+ * The roll/pitch convention below is based on physical validation on the
+ * current vehicle:
  *
  *   +X = nose/forward
- *   +Y = drone right
+ *   +Y = drone left
  *   +Z = down
  *
- * Positive rotations are right-wing-down roll, nose-up pitch and
- * nose-right yaw.
+ *   +roll  = left side goes down
+ *   +pitch = nose/front goes up
+ *
+ * Yaw sign is intentionally not stated here yet. It must be physically
+ * validated and locked together with the final CW/CCW motor convention
+ * before the yaw mixer signs are finalized.
  */
 bool imu_body_frame_from_pipeline(
     const accel_pipeline_output_t *accel,
