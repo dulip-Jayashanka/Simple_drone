@@ -193,7 +193,7 @@ typedef struct
 
 /*
  * ============================================================
- * LOCKED SIMPLE_DRONE MOTOR GEOMETRY
+ * LOCKED SIMPLE_DRONE MOTOR GEOMETRY AND SIGN CONVENTION
  * ============================================================
  *
  * Viewed FROM ABOVE:
@@ -215,7 +215,7 @@ typedef struct
  *                CW                    CCW
  *
  *
- * Controller-side physical positive rotations:
+ * Finalized controller-side positive rotations:
  *
  *     +roll
  *         right side goes DOWN
@@ -227,15 +227,27 @@ typedef struct
  *         nose turns RIGHT
  *
  *
+ * Corresponding positive correction effects:
+ *
+ *     +R
+ *         M1/M4 increase, M2/M3 decrease
+ *
+ *     +P
+ *         M1/M2 increase, M3/M4 decrease
+ *
+ *     +Y
+ *         M1/M3 increase, M2/M4 decrease
+ *
+ *
  * Therefore the locked mixer equations are:
  *
- *     M1 = C - R + P + Y
+ *     M1 = C + R + P + Y
  *
- *     M2 = C + R + P - Y
+ *     M2 = C - R + P - Y
  *
- *     M3 = C + R - P + Y
+ *     M3 = C - R - P + Y
  *
- *     M4 = C - R - P - Y
+ *     M4 = C + R - P - Y
  *
  *
  * where:
