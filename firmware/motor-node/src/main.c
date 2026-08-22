@@ -1,4 +1,17 @@
+#ifndef MOTOR_NODE_LINK_ENABLE
+#define MOTOR_NODE_LINK_ENABLE 0
+#endif
+
+#if (MOTOR_NODE_LINK_ENABLE != 0) && \
+    (MOTOR_NODE_LINK_ENABLE != 1)
+#error "MOTOR_NODE_LINK_ENABLE must be 0 or 1"
+#endif
+
+#if MOTOR_NODE_LINK_ENABLE
 #include "command_receiver.h"
+#include "uart2_link.h"
+#endif
+
 #include "fault_handlers.h"
 #include "fault_test.h"
 #include "motor_node_state.h"
@@ -6,7 +19,6 @@
 #include "system_clock.h"
 #include "status_led.h"
 #include "system_time.h"
-#include "uart2_link.h"
 #include "uart_diag.h"
 
 #include <stdbool.h>
@@ -51,20 +63,17 @@ volatile uint32_t
     g_uart_diag_output_ok;
 
 
+#if MOTOR_NODE_LINK_ENABLE
+
 /*
  * FMCOM Phase 6.1.
  *
  * Dedicated USART2 motor-command receive transport.
+ *
+ * This state exists only in a MOTOR_NODE_LINK_ENABLE=1 build.
  */
 volatile uart2_link_status_t
     g_motor_command_uart_status;
-
-
-#define STATUS_LED_TOGGLE_INTERVAL_MS \
-    500UL
-
-#define UART_DIAG_BAUD_RATE \
-    115200UL
 
 
 #ifndef MOTOR_NODE_LINK_BAUD
@@ -73,6 +82,15 @@ volatile uart2_link_status_t
     230400UL
 
 #endif
+
+#endif
+
+
+#define STATUS_LED_TOGGLE_INTERVAL_MS \
+    500UL
+
+#define UART_DIAG_BAUD_RATE \
+    115200UL
 
 
 static void
@@ -215,8 +233,9 @@ main(void)
      * USART1 DIAGNOSTICS
      * ========================================================
      *
-     * USART1 remains completely separate from the new USART2
-     * flight-controller motor-command link.
+     * USART1 remains the existing human-readable diagnostic link.
+     * The optional FC-to-motor-node command path uses USART2 and is
+     * compiled only when MOTOR_NODE_LINK_ENABLE=1.
      */
 
     g_uart_diag_status =
@@ -368,7 +387,8 @@ main(void)
      * ========================================================
      *
      * Phase 6.1 deliberately retains the existing DISARMED-only
-     * safety behavior.
+     * safety behavior whether the communication feature is enabled
+     * or disabled.
      */
 
     if (!motor_node_state_init())
@@ -404,14 +424,19 @@ main(void)
     }
 
 
+#if MOTOR_NODE_LINK_ENABLE
+
     /*
      * ========================================================
      * FMCOM PHASE 6.1
-     * COMMAND RECEIVER
+     * OPTIONAL COMMAND RECEIVER
      * ========================================================
      *
-     * Initialize the software parser before enabling the UART RX
-     * interrupt.
+     * This complete block is excluded from a normal build when:
+     *
+     *     MOTOR_NODE_LINK_ENABLE=0
+     *
+     * Initialize the software parser before enabling USART2 RX.
      */
 
     command_receiver_init();
@@ -437,9 +462,8 @@ main(void)
         UART2_LINK_OK)
     {
         /*
-         * Communication is required when this phase is compiled.
-         *
-         * Fail closed: physical motor outputs stay safe.
+         * A link-enabled build requires a correctly initialized
+         * receive path. Fail closed if it cannot be configured.
          */
         motor_outputs_force_safe();
 
@@ -476,6 +500,8 @@ main(void)
             uart_diag_write_line(
                 "[LINK] Receive/validate only; PWM remains disabled"));
     }
+
+#endif
 
 
     /*
@@ -514,7 +540,8 @@ main(void)
          * 1. EXISTING LOCAL MOTOR SAFETY FIRST
          * ----------------------------------------------------
          *
-         * command_receiver cannot bypass this state machine.
+         * Optional communication processing cannot bypass this
+         * state machine.
          */
         if (!motor_node_state_process())
         {
@@ -547,9 +574,11 @@ main(void)
             millis();
 
 
+#if MOTOR_NODE_LINK_ENABLE
+
         /*
          * ----------------------------------------------------
-         * 2. FMCOM COMMAND RX / VALIDATION
+         * 2. OPTIONAL FMCOM COMMAND RX / VALIDATION
          * ----------------------------------------------------
          *
          * command_receiver_process():
@@ -571,6 +600,8 @@ main(void)
          */
         (void)command_receiver_process(
             current_time_ms);
+
+#endif
 
 
         /*
