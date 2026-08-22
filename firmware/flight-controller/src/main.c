@@ -358,9 +358,46 @@
 #endif
 
 
+/*
+ * Independent mixer UART diagnostic switch.
+ *
+ * Enabling this does NOT enable any of the existing:
+ *
+ *     gyro pipeline UART
+ *     attitude UART
+ *     inner-rate UART
+ *     outer-attitude UART
+ *
+ * debug streams.
+ */
+#ifndef MOTOR_MIXER_UART_DEBUG
+#define MOTOR_MIXER_UART_DEBUG 0
+#endif
+
+
 #if MOTOR_MIXER_ENABLE && \
     !INNER_RATE_CONTROL_ENABLE
 #error "Motor mixer requires INNER_RATE_CONTROL_ENABLE=1"
+#endif
+
+
+#if MOTOR_MIXER_UART_DEBUG && \
+    !MOTOR_MIXER_ENABLE
+#error "MOTOR_MIXER_UART_DEBUG requires MOTOR_MIXER_ENABLE=1"
+#endif
+
+
+/*
+ * The mixer calculation itself remains on the fast inner-loop
+ * path.
+ *
+ * UART observation is intentionally much slower: 5 Hz.
+ */
+#if MOTOR_MIXER_UART_DEBUG
+
+#define MOTOR_MIXER_UART_PERIOD_US \
+    200000UL
+
 #endif
 
 
@@ -409,7 +446,8 @@
      GYRO_PIPELINE_UART_DEBUG || \
      ATTITUDE_ESTIMATOR_UART_DEBUG || \
      INNER_RATE_CONTROL_UART_DEBUG || \
-     OUTER_ATTITUDE_CONTROL_UART_DEBUG)
+     OUTER_ATTITUDE_CONTROL_UART_DEBUG || \
+     MOTOR_MIXER_UART_DEBUG)
 #error "Raw-to-attitude timing requires continuous UART debug to be disabled"
 #endif
 
@@ -1841,6 +1879,165 @@ inner_rate_uart_write_output(
 
 /*
  * ============================================================
+ * MOTOR MIXER UART
+ * ============================================================
+ *
+ * Completely independent from the existing controller UART
+ * debug switches.
+ *
+ * This section is compiled only when:
+ *
+ *     MOTOR_MIXER_UART_DEBUG=1
+ */
+
+#if MOTOR_MIXER_UART_DEBUG
+
+static void
+motor_mixer_uart_write_quad(
+    float m1,
+    float m2,
+    float m3,
+    float m4)
+{
+    gyro_uart_write_fixed3(
+        m1);
+
+
+    (void)uart_diag_write_char(
+        ',');
+
+
+    gyro_uart_write_fixed3(
+        m2);
+
+
+    (void)uart_diag_write_char(
+        ',');
+
+
+    gyro_uart_write_fixed3(
+        m3);
+
+
+    (void)uart_diag_write_char(
+        ',');
+
+
+    gyro_uart_write_fixed3(
+        m4);
+}
+
+
+static void
+motor_mixer_uart_write_output(
+    const motor_mixer_output_t *output)
+{
+    (void)uart_diag_write_string(
+        "[MIXER] seq=");
+
+
+    (void)uart_diag_write_uint32(
+        output->sequence);
+
+
+    (void)uart_diag_write_string(
+        " dt_us=");
+
+
+    (void)uart_diag_write_uint32(
+        output->sample_interval_us);
+
+
+    /*
+     * Base/common collective input.
+     */
+    (void)uart_diag_write_string(
+        " C=");
+
+
+    gyro_uart_write_fixed3(
+        output->collective_input);
+
+
+    /*
+     * Inner-rate-controller corrections:
+     *
+     *     roll,pitch,yaw
+     */
+    (void)uart_diag_write_string(
+        " corr=");
+
+
+    gyro_uart_write_float_triplet(
+        output->roll_correction,
+        output->pitch_correction,
+        output->yaw_correction);
+
+
+    /*
+     * Requested M1..M4 before mixer desaturation.
+     */
+    (void)uart_diag_write_string(
+        " raw=");
+
+
+    motor_mixer_uart_write_quad(
+        output->raw_m1,
+        output->raw_m2,
+        output->raw_m3,
+        output->raw_m4);
+
+
+    /*
+     * Final normalized M1..M4.
+     */
+    (void)uart_diag_write_string(
+        " out=");
+
+
+    motor_mixer_uart_write_quad(
+        output->m1,
+        output->m2,
+        output->m3,
+        output->m4);
+
+
+    /*
+     * Desaturation diagnostics.
+     */
+    (void)uart_diag_write_string(
+        " scale=");
+
+
+    gyro_uart_write_fixed3(
+        output->differential_scale);
+
+
+    (void)uart_diag_write_string(
+        " C_used=");
+
+
+    gyro_uart_write_fixed3(
+        output->collective_used);
+
+
+    (void)uart_diag_write_string(
+        " flags=");
+
+
+    (void)uart_diag_write_hex32(
+        output->flags);
+
+
+    (void)uart_diag_write_string(
+        "\r\n");
+}
+
+#endif
+
+
+/*
+ * ============================================================
  * OUTER ATTITUDE UART
  * ============================================================
  */
@@ -3173,6 +3370,21 @@ main(void)
     motor_mixer_output_t
         motor_mixer_output;
 
+
+#if MOTOR_MIXER_UART_DEBUG
+
+    /*
+     * UART timing state is completely separate from mixer
+     * calculation state.
+     */
+    uint32_t
+        motor_mixer_previous_uart_timestamp_us;
+
+    bool
+        motor_mixer_uart_timestamp_valid;
+
+#endif
+
 #endif
 
 
@@ -3924,6 +4136,18 @@ main(void)
         (motor_mixer_output_t){0};
 
 
+#if MOTOR_MIXER_UART_DEBUG
+
+    motor_mixer_previous_uart_timestamp_us =
+        0UL;
+
+
+    motor_mixer_uart_timestamp_valid =
+        false;
+
+#endif
+
+
     if (g_fc_uart_status ==
         UART_DIAG_OK)
     {
@@ -3941,6 +4165,14 @@ main(void)
 
         (void)uart_diag_write_line(
             "[MIXER] No motor-node UART/PWM in this phase");
+
+
+#if MOTOR_MIXER_UART_DEBUG
+
+        (void)uart_diag_write_line(
+            "[MIXER] Independent UART debug enabled at 5 Hz");
+
+#endif
     }
 
 #endif
@@ -4672,9 +4904,8 @@ main(void)
 
 
                     /*
-                     * Publish every attempted mixer calculation
-                     * so both accepted and rejected states can
-                     * be inspected with GDB.
+                     * Keep the existing mixer execution exactly
+                     * independent from UART debugging.
                      */
                     (void)motor_mixer_update(
                         &motor_mixer_input,
@@ -4915,6 +5146,43 @@ main(void)
 
 
                         inner_rate_uart_timestamp_valid =
+                            true;
+                    }
+
+#endif
+
+
+                    /*
+                     * ==========================================
+                     * MOTOR MIXER UART
+                     * ==========================================
+                     *
+                     * This is only an observer of the mixer
+                     * output that has already been calculated.
+                     *
+                     * The mixer update above is unchanged.
+                     */
+#if MOTOR_MIXER_UART_DEBUG
+
+                    if (((motor_mixer_output.flags &
+                          MOTOR_MIXER_VALID) != 0UL) &&
+                        (g_fc_uart_status ==
+                         UART_DIAG_OK) &&
+                        ((!motor_mixer_uart_timestamp_valid) ||
+                         ((uint32_t)(
+                              motor_mixer_output.timestamp_us -
+                              motor_mixer_previous_uart_timestamp_us) >=
+                          MOTOR_MIXER_UART_PERIOD_US)))
+                    {
+                        motor_mixer_uart_write_output(
+                            &motor_mixer_output);
+
+
+                        motor_mixer_previous_uart_timestamp_us =
+                            motor_mixer_output.timestamp_us;
+
+
+                        motor_mixer_uart_timestamp_valid =
                             true;
                     }
 

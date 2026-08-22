@@ -218,7 +218,7 @@ typedef struct
  * Controller-side physical positive rotations:
  *
  *     +roll
- *         left side goes DOWN
+ *         right side goes DOWN
  *
  *     +pitch
  *         nose/front goes UP

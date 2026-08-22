@@ -420,27 +420,24 @@ motor_mixer_update(
 
 
     d1 =
-        (-input->roll_correction) +
-        input->pitch_correction +
-        input->yaw_correction;
-
+    input->roll_correction +
+    input->pitch_correction +
+    input->yaw_correction;
 
     d2 =
-        input->roll_correction +
-        input->pitch_correction -
-        input->yaw_correction;
-
+    (-input->roll_correction) +
+    input->pitch_correction -
+    input->yaw_correction;
 
     d3 =
-        input->roll_correction -
-        input->pitch_correction +
-        input->yaw_correction;
-
+    (-input->roll_correction) -
+    input->pitch_correction +
+    input->yaw_correction;
 
     d4 =
-        (-input->roll_correction) -
-        input->pitch_correction -
-        input->yaw_correction;
+    input->roll_correction -
+    input->pitch_correction -
+    input->yaw_correction;
 
 
     /*
