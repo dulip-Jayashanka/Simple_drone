@@ -85,6 +85,7 @@ OBJECTS := \
 	$(BUILD_DIR)/main.o \
 	$(BUILD_DIR)/motor_outputs.o \
 	$(BUILD_DIR)/motor_node_state.o \
+	$(BUILD_DIR)/freestanding_mem.o \
 	$(BUILD_DIR)/fault_test.o \
 	$(BUILD_DIR)/startup_stm32f103c8.o \
 	$(BUILD_DIR)/system_clock.o \
@@ -284,6 +285,10 @@ $(BUILD_DIR)/fault_handlers.o: \
 $(ELF): $(OBJECTS) $(LINKER_SCRIPT)
 	$(CC) $(OBJECTS) $(LDFLAGS) -lgcc -o $@
 
+$(BUILD_DIR)/freestanding_mem.o: \
+	$(SRC_DIR)/freestanding_mem.c | $(BUILD_DIR)
+
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BIN): $(ELF)
 	$(OBJCOPY) -O binary $< $@
