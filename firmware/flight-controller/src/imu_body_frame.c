@@ -16,6 +16,19 @@
  *     sensor Z -> body -Z
  *
  *
+ * Finalized physical controller convention:
+ *
+ *     +roll  = right side goes down
+ *
+ *     +pitch = nose/front goes up
+ *
+ *     +yaw   = nose turns right
+ *
+ *
+ * These physical rotation signs are the convention that the
+ * estimator, attitude controller, rate controller and motor
+ * mixer must share.
+ *
  * The Z inversion explains an important observed behavior:
  *
  *     physical nose-right turn
