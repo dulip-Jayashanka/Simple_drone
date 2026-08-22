@@ -25,13 +25,17 @@
 #include "motor_mixer.h"
 #endif
 
+#if MOTOR_NODE_LINK_ENABLE
+#include "motor_node_link.h"
+#endif
+
 #include "imu_acquisition.h"
+#include "i2c1.h"
 #include "micros.h"
 #include "mpu9250.h"
 #include "system_clock.h"
 #include "system_time.h"
 #include "uart_diag.h"
-#include "i2c1.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -209,20 +213,6 @@
  * ============================================================
  * INNER ANGULAR-RATE CONTROL
  * ============================================================
- *
- * Fast loop.
- *
- * approximately 500 Hz:
- *
- * desired angular rate
- *          -
- * measured gyro angular rate
- *          |
- *          v
- *      rate PID
- *          |
- *          v
- * roll / pitch / yaw correction
  */
 
 #ifndef INNER_RATE_CONTROL_ENABLE
@@ -259,31 +249,6 @@
  * ============================================================
  * OUTER ATTITUDE CONTROL
  * ============================================================
- *
- * Slower roll/pitch loop.
- *
- * target angle
- *      -
- * estimated angle
- *      |
- *      v
- * angle error
- *      |
- *      v
- * proportional attitude gain
- *      |
- *      v
- * desired angular rate
- *      |
- *      v
- * rate limit
- *      |
- *      v
- * held rate setpoint for inner PID
- *
- * Yaw heading control is intentionally NOT implemented here.
- * The yaw inner PID continues to receive a direct yaw-rate
- * setpoint.
  */
 
 #ifndef OUTER_ATTITUDE_CONTROL_ENABLE
@@ -327,30 +292,27 @@
  * MOTOR MIXER
  * ============================================================
  *
- * The mixer belongs to the fast control path:
+ * Fast control path:
  *
- *     inner rate controller
- *             |
- *             v
- *       R / P / Y corrections
- *             +
- *         collective C
- *             |
- *             v
- *         motor mixer
- *             |
- *             v
- *       M1 / M2 / M3 / M4
+ * inner rate controller
+ *         |
+ *         v
+ *       R/P/Y
+ *         +
+ *    collective C
+ *         |
+ *         v
+ *      mixer
+ *         |
+ *         v
+ *   M1/M2/M3/M4
  *
- * This phase stops at normalized M1..M4 diagnostics.
+ * The mixer itself remains independent from:
  *
- * There is NO:
- *
- *     FC -> motor-node command transmission
- *     ESC PWM generation
- *     motor arming
- *
- * in this phase.
+ *     UART
+ *     DMA
+ *     motor-node state
+ *     PWM
  */
 
 #ifndef MOTOR_MIXER_ENABLE
@@ -358,18 +320,6 @@
 #endif
 
 
-/*
- * Independent mixer UART diagnostic switch.
- *
- * Enabling this does NOT enable any of the existing:
- *
- *     gyro pipeline UART
- *     attitude UART
- *     inner-rate UART
- *     outer-attitude UART
- *
- * debug streams.
- */
 #ifndef MOTOR_MIXER_UART_DEBUG
 #define MOTOR_MIXER_UART_DEBUG 0
 #endif
@@ -387,17 +337,49 @@
 #endif
 
 
-/*
- * The mixer calculation itself remains on the fast inner-loop
- * path.
- *
- * UART observation is intentionally much slower: 5 Hz.
- */
 #if MOTOR_MIXER_UART_DEBUG
 
 #define MOTOR_MIXER_UART_PERIOD_US \
     200000UL
 
+#endif
+
+
+/*
+ * ============================================================
+ * FLIGHT CONTROLLER -> MOTOR NODE LINK
+ * ============================================================
+ *
+ * FMCOM Phase 6.1.
+ *
+ * Only final validated mixer M1..M4 values are passed here.
+ *
+ * USART1:
+ *     existing PC/debug diagnostics
+ *
+ * USART2:
+ *     dedicated FC -> motor-node binary command link
+ *
+ * This phase still has:
+ *
+ *     NO motor-node PWM
+ *     NO motor arming
+ *     NO motor-node command watchdog
+ */
+
+#ifndef MOTOR_NODE_LINK_ENABLE
+#define MOTOR_NODE_LINK_ENABLE 0
+#endif
+
+
+#ifndef MOTOR_NODE_LINK_BAUD
+#define MOTOR_NODE_LINK_BAUD 230400UL
+#endif
+
+
+#if MOTOR_NODE_LINK_ENABLE && \
+    !MOTOR_MIXER_ENABLE
+#error "MOTOR_NODE_LINK_ENABLE requires MOTOR_MIXER_ENABLE=1"
 #endif
 
 
@@ -449,6 +431,12 @@
      OUTER_ATTITUDE_CONTROL_UART_DEBUG || \
      MOTOR_MIXER_UART_DEBUG)
 #error "Raw-to-attitude timing requires continuous UART debug to be disabled"
+#endif
+
+
+#if MEASURE_RAW_TO_ATTITUDE_TIMES && \
+    MOTOR_NODE_LINK_ENABLE
+#error "Raw-to-attitude timing requires MOTOR_NODE_LINK_ENABLE=0"
 #endif
 
 
@@ -700,19 +688,10 @@ volatile rate_controller_output_t
 
 
 /*
- * ------------------------------------------------------------
- * TEMPORARY INNER-RATE TEST PARAMETERS
- * ------------------------------------------------------------
+ * TEMPORARY SIGN-TEST PARAMETERS.
  *
- * NOT FLIGHT-TUNED GAINS.
- *
- * Kp = 1
- * Ki = 0
- * Kd = 0
- *
- * This remains the existing sign-test configuration.
+ * These are NOT flight-tuned gains.
  */
-
 #define INNER_RATE_TEST_KP \
     1.0f
 
@@ -827,19 +806,10 @@ volatile motor_mixer_output_t
 
 
 /*
- * Temporary mathematical base command used only for the mixer
- * integration test.
+ * Temporary mathematical collective for the current level/sign
+ * test.
  *
- * IMPORTANT:
- *
- *     0.50 does NOT mean known hover throttle.
- *
- *     0.50 is NOT sent to an ESC.
- *
- *     0.50 is NOT a flight-tuned value.
- *
- * It simply provides a visible center point around which the
- * roll/pitch/yaw differential corrections can be inspected.
+ * It is NOT known hover throttle.
  */
 #define MOTOR_MIXER_TEST_COLLECTIVE \
     0.50f
@@ -858,12 +828,6 @@ volatile motor_mixer_output_t
 volatile attitude_controller_output_t
     g_latest_attitude_controller_output;
 
-
-/*
- * ------------------------------------------------------------
- * TEMPORARY LEVEL-HOLD TEST PARAMETERS
- * ------------------------------------------------------------
- */
 
 #define OUTER_ATTITUDE_TEST_ROLL_GAIN_PER_S \
     1.0f
@@ -1062,7 +1026,8 @@ raw_to_attitude_metric_update(
     uint32_t elapsed_us)
 {
     if ((metric->sample_count == 0UL) ||
-        (elapsed_us < metric->min_us))
+        (elapsed_us <
+         metric->min_us))
     {
         metric->min_us =
             elapsed_us;
@@ -1124,7 +1089,8 @@ raw_to_attitude_timing_note_raw_sample(
 
 
     if (g_raw_to_attitude_timing
-            .first_data_ready_seen == 0UL)
+            .first_data_ready_seen ==
+        0UL)
     {
         g_raw_to_attitude_timing
             .first_data_ready_seen =
@@ -1173,7 +1139,8 @@ raw_to_attitude_timing_record(
 
 
     if ((attitude_flags &
-         ATTITUDE_EULER_UPDATED) != 0UL)
+         ATTITUDE_EULER_UPDATED) !=
+        0UL)
     {
         raw_to_attitude_euler_timestamp_us =
             data_ready_timestamp_us;
@@ -1194,7 +1161,8 @@ raw_to_attitude_timing_record(
 
 
     if (g_raw_to_attitude_timing
-            .first_attitude_seen == 0UL)
+            .first_attitude_seen ==
+        0UL)
     {
         g_raw_to_attitude_timing
             .first_attitude_seen =
@@ -1227,7 +1195,8 @@ raw_to_attitude_timing_record(
 
 
     if (g_raw_to_attitude_timing
-            .warmup_remaining != 0UL)
+            .warmup_remaining !=
+        0UL)
     {
         g_raw_to_attitude_timing
             .warmup_remaining--;
@@ -1277,7 +1246,8 @@ raw_to_attitude_timing_record(
         .valid_output_count++;
 
 
-    if (sample_interval_us != 0UL)
+    if (sample_interval_us !=
+        0UL)
     {
         if (data_ready_to_output_us >
             sample_interval_us)
@@ -1297,7 +1267,8 @@ raw_to_attitude_timing_record(
 
 
     if ((gyro_flags &
-         GYRO_TIMING_WARNING) != 0UL)
+         GYRO_TIMING_WARNING) !=
+        0UL)
     {
         g_raw_to_attitude_timing
             .gyro_timing_warning_count++;
@@ -1305,7 +1276,8 @@ raw_to_attitude_timing_record(
 
 
     if ((gyro_flags &
-         GYRO_SEQUENCE_GAP) != 0UL)
+         GYRO_SEQUENCE_GAP) !=
+        0UL)
     {
         g_raw_to_attitude_timing
             .gyro_sequence_gap_count++;
@@ -1313,7 +1285,8 @@ raw_to_attitude_timing_record(
 
 
     if ((attitude_flags &
-         ATTITUDE_EULER_UPDATED) != 0UL)
+         ATTITUDE_EULER_UPDATED) !=
+        0UL)
     {
         g_raw_to_attitude_timing
             .euler_update_count++;
@@ -1396,14 +1369,16 @@ accel_debug_write_fixed3(
     {
         scaled =
             (int32_t)(
-                (value * 1000.0f) -
+                (value *
+                 1000.0f) -
                 0.5f);
     }
     else
     {
         scaled =
             (int32_t)(
-                (value * 1000.0f) +
+                (value *
+                 1000.0f) +
                 0.5f);
     }
 
@@ -1424,7 +1399,8 @@ accel_debug_write_fixed3(
 
 
     (void)uart_diag_write_uint32(
-        magnitude / 1000UL);
+        magnitude /
+        1000UL);
 
 
     (void)uart_diag_write_char(
@@ -1432,17 +1408,20 @@ accel_debug_write_fixed3(
 
 
     fraction =
-        magnitude % 1000UL;
+        magnitude %
+        1000UL;
 
 
-    if (fraction < 100UL)
+    if (fraction <
+        100UL)
     {
         (void)uart_diag_write_char(
             '0');
     }
 
 
-    if (fraction < 10UL)
+    if (fraction <
+        10UL)
     {
         (void)uart_diag_write_char(
             '0');
@@ -1517,12 +1496,14 @@ accel_debug_write_pipeline(
     (void)uart_diag_write_string(
         "[ACCEL PIPE] seq=");
 
+
     (void)uart_diag_write_uint32(
         output->sequence);
 
 
     (void)uart_diag_write_string(
         " t_us=");
+
 
     (void)uart_diag_write_uint32(
         output->timestamp_us);
@@ -1532,6 +1513,7 @@ accel_debug_write_pipeline(
 
     (void)uart_diag_write_string(
         " raw=");
+
 
     accel_debug_write_i16_triplet(
         output->raw_x,
@@ -1546,6 +1528,7 @@ accel_debug_write_pipeline(
     (void)uart_diag_write_string(
         " median=");
 
+
     accel_debug_write_i16_triplet(
         output->median_x,
         output->median_y,
@@ -1558,6 +1541,7 @@ accel_debug_write_pipeline(
 
     (void)uart_diag_write_string(
         " calibrated_g=");
+
 
     accel_debug_write_float_triplet(
         output->calibrated_x_g,
@@ -1572,6 +1556,7 @@ accel_debug_write_pipeline(
     (void)uart_diag_write_string(
         " filtered_g=");
 
+
     accel_debug_write_float_triplet(
         output->filtered_x_g,
         output->filtered_y_g,
@@ -1585,6 +1570,7 @@ accel_debug_write_pipeline(
     (void)uart_diag_write_string(
         " filtered_ms2=");
 
+
     accel_debug_write_float_triplet(
         output->filtered_x_ms2,
         output->filtered_y_ms2,
@@ -1596,8 +1582,10 @@ accel_debug_write_pipeline(
     (void)uart_diag_write_string(
         " flags=");
 
+
     (void)uart_diag_write_hex32(
         output->flags);
+
 
     (void)uart_diag_write_string(
         "\r\n");
@@ -1628,14 +1616,16 @@ gyro_uart_write_fixed3(
     {
         scaled =
             (int32_t)(
-                (value * 1000.0f) -
+                (value *
+                 1000.0f) -
                 0.5f);
     }
     else
     {
         scaled =
             (int32_t)(
-                (value * 1000.0f) +
+                (value *
+                 1000.0f) +
                 0.5f);
     }
 
@@ -1656,7 +1646,8 @@ gyro_uart_write_fixed3(
 
 
     (void)uart_diag_write_uint32(
-        magnitude / 1000UL);
+        magnitude /
+        1000UL);
 
 
     (void)uart_diag_write_char(
@@ -1664,17 +1655,20 @@ gyro_uart_write_fixed3(
 
 
     fraction =
-        magnitude % 1000UL;
+        magnitude %
+        1000UL;
 
 
-    if (fraction < 100UL)
+    if (fraction <
+        100UL)
     {
         (void)uart_diag_write_char(
             '0');
     }
 
 
-    if (fraction < 10UL)
+    if (fraction <
+        10UL)
     {
         (void)uart_diag_write_char(
             '0');
@@ -1715,13 +1709,16 @@ gyro_uart_report_calibration_state(
     uint32_t previous_flags)
 {
     if ((output->flags &
-         GYRO_BIAS_SETTLING) != 0UL)
+         GYRO_BIAS_SETTLING) !=
+        0UL)
     {
         if ((previous_flags &
-             GYRO_BIAS_SETTLING) == 0UL)
+             GYRO_BIAS_SETTLING) ==
+            0UL)
         {
             if ((output->flags &
-                 GYRO_BIAS_UNSTABLE) != 0UL)
+                 GYRO_BIAS_UNSTABLE) !=
+                0UL)
             {
                 (void)uart_diag_write_line(
                     "[GYRO CAL] Motion detected; restarting calibration");
@@ -1733,29 +1730,35 @@ gyro_uart_report_calibration_state(
         }
     }
     else if ((output->flags &
-              GYRO_BIAS_CALIBRATING) != 0UL)
+              GYRO_BIAS_CALIBRATING) !=
+             0UL)
     {
         if ((previous_flags &
-             GYRO_BIAS_CALIBRATING) == 0UL)
+             GYRO_BIAS_CALIBRATING) ==
+            0UL)
         {
             (void)uart_diag_write_line(
                 "[GYRO CAL] Collecting 5 seconds; keep stationary");
         }
     }
     else if (((output->flags &
-               GYRO_BIAS_READY) != 0UL) &&
+               GYRO_BIAS_READY) !=
+              0UL) &&
              ((previous_flags &
-               GYRO_BIAS_READY) == 0UL))
+               GYRO_BIAS_READY) ==
+              0UL))
     {
         if ((output->flags &
-             GYRO_BIAS_FROM_STARTUP) != 0UL)
+             GYRO_BIAS_FROM_STARTUP) !=
+            0UL)
         {
             (void)uart_diag_write_string(
                 "[GYRO CAL] Startup bias ready samples=");
 
 
             (void)uart_diag_write_uint32(
-                output->calibration_sample_count);
+                output->
+                    calibration_sample_count);
         }
         else
         {
@@ -1789,12 +1792,14 @@ gyro_uart_write_pipeline(
     (void)uart_diag_write_string(
         "[GYRO PIPE] seq=");
 
+
     (void)uart_diag_write_uint32(
         output->sequence);
 
 
     (void)uart_diag_write_string(
         " t_us=");
+
 
     (void)uart_diag_write_uint32(
         output->timestamp_us);
@@ -1803,12 +1808,14 @@ gyro_uart_write_pipeline(
     (void)uart_diag_write_string(
         " dt_us=");
 
+
     (void)uart_diag_write_uint32(
         output->sample_interval_us);
 
 
     (void)uart_diag_write_string(
         " dps=");
+
 
     gyro_uart_write_float_triplet(
         output->x_dps,
@@ -1818,6 +1825,7 @@ gyro_uart_write_pipeline(
 
     (void)uart_diag_write_string(
         " flags=");
+
 
     (void)uart_diag_write_hex32(
         output->flags);
@@ -1881,13 +1889,6 @@ inner_rate_uart_write_output(
  * ============================================================
  * MOTOR MIXER UART
  * ============================================================
- *
- * Completely independent from the existing controller UART
- * debug switches.
- *
- * This section is compiled only when:
- *
- *     MOTOR_MIXER_UART_DEBUG=1
  */
 
 #if MOTOR_MIXER_UART_DEBUG
@@ -1948,9 +1949,6 @@ motor_mixer_uart_write_output(
         output->sample_interval_us);
 
 
-    /*
-     * Base/common collective input.
-     */
     (void)uart_diag_write_string(
         " C=");
 
@@ -1959,11 +1957,6 @@ motor_mixer_uart_write_output(
         output->collective_input);
 
 
-    /*
-     * Inner-rate-controller corrections:
-     *
-     *     roll,pitch,yaw
-     */
     (void)uart_diag_write_string(
         " corr=");
 
@@ -1974,9 +1967,6 @@ motor_mixer_uart_write_output(
         output->yaw_correction);
 
 
-    /*
-     * Requested M1..M4 before mixer desaturation.
-     */
     (void)uart_diag_write_string(
         " raw=");
 
@@ -1988,9 +1978,6 @@ motor_mixer_uart_write_output(
         output->raw_m4);
 
 
-    /*
-     * Final normalized M1..M4.
-     */
     (void)uart_diag_write_string(
         " out=");
 
@@ -2002,9 +1989,6 @@ motor_mixer_uart_write_output(
         output->m4);
 
 
-    /*
-     * Desaturation diagnostics.
-     */
     (void)uart_diag_write_string(
         " scale=");
 
@@ -2052,8 +2036,10 @@ outer_attitude_uart_write_pair(
     gyro_uart_write_fixed3(
         first);
 
+
     (void)uart_diag_write_char(
         ',');
+
 
     gyro_uart_write_fixed3(
         second);
@@ -2104,8 +2090,10 @@ outer_attitude_uart_write_output(
 
 
     outer_attitude_uart_write_pair(
-        output->desired_roll_rate_rad_s,
-        output->desired_pitch_rate_rad_s);
+        output->
+            desired_roll_rate_rad_s,
+        output->
+            desired_pitch_rate_rad_s);
 
 
     (void)uart_diag_write_string(
@@ -2470,7 +2458,7 @@ stop_with_message(
 
 /*
  * ============================================================
- * ACCEL CAPTURE
+ * ACCEL CAPTURE TEST
  * ============================================================
  */
 
@@ -2534,7 +2522,8 @@ accel_capture_send_values(
 
 
     for (i = 0UL;
-         i < accel_capture_count;
+         i <
+         accel_capture_count;
          i++)
     {
         (void)uart_diag_write_uint32(
@@ -2644,7 +2633,8 @@ run_accel_capture_test(void)
 
 
             if ((sample.flags &
-                 IMU_RAW_MOTION_VALID) == 0UL)
+                 IMU_RAW_MOTION_VALID) ==
+                0UL)
             {
                 continue;
             }
@@ -2745,7 +2735,7 @@ run_accel_capture_test(void)
 
 /*
  * ============================================================
- * GYRO CAPTURE
+ * GYRO CAPTURE TEST
  * ============================================================
  */
 
@@ -2818,7 +2808,8 @@ gyro_capture_send_values(
 
 
     for (i = 0UL;
-         i < gyro_capture_count;
+         i <
+         gyro_capture_count;
          i++)
     {
         (void)uart_diag_write_uint32(
@@ -2928,7 +2919,8 @@ run_gyro_capture_test(void)
 
 
             if ((sample.flags &
-                 IMU_RAW_MOTION_VALID) == 0UL)
+                 IMU_RAW_MOTION_VALID) ==
+                0UL)
             {
                 continue;
             }
@@ -3141,14 +3133,17 @@ mpu_who_am_i_test(
         "\r\n");
 
 
-    if ((status_68 == I2C1_OK) ||
-        (status_69 == I2C1_OK))
+    if ((status_68 ==
+         I2C1_OK) ||
+        (status_69 ==
+         I2C1_OK))
     {
         uint8_t detected_id;
 
 
         detected_id =
-            (status_68 == I2C1_OK) ?
+            (status_68 ==
+             I2C1_OK) ?
             id_68 :
             id_69;
 
@@ -3333,10 +3328,6 @@ main(void)
 #if INNER_RATE_CONTROL_UART_DEBUG || \
     MOTOR_MIXER_ENABLE
 
-    /*
-     * Mixer also needs the success/failure state of the current
-     * rate-controller update.
-     */
     bool
         inner_rate_output_ready;
 
@@ -3373,10 +3364,6 @@ main(void)
 
 #if MOTOR_MIXER_UART_DEBUG
 
-    /*
-     * UART timing state is completely separate from mixer
-     * calculation state.
-     */
     uint32_t
         motor_mixer_previous_uart_timestamp_us;
 
@@ -3508,7 +3495,8 @@ main(void)
         (pclk1_hz ==
          system_clock_get_hclk_hz()) ?
         pclk1_hz :
-        (pclk1_hz * 2UL);
+        (pclk1_hz *
+         2UL);
 
 
     g_fc_micros_status =
@@ -3527,6 +3515,9 @@ main(void)
     }
 
 
+    /*
+     * USART1 remains the human-readable diagnostic interface.
+     */
     g_fc_uart_status =
         uart_diag_init(
             system_clock_get_pclk2_hz(),
@@ -3925,7 +3916,8 @@ main(void)
 #if GYRO_PIPELINE_ENABLE
 
     gyro_pipeline_init(
-        GYRO_INITIAL_BIAS_CAL_ENABLE != 0);
+        GYRO_INITIAL_BIAS_CAL_ENABLE !=
+        0);
 
 
     gyro_output =
@@ -4094,11 +4086,20 @@ main(void)
 #if MOTOR_MIXER_ENABLE
 
         (void)uart_diag_write_line(
-            "[RATE] Outputs feed diagnostic motor mixer");
+            "[RATE] Outputs feed motor mixer");
 
+
+#if MOTOR_NODE_LINK_ENABLE
 
         (void)uart_diag_write_line(
-            "[RATE] Mixer output is NOT transmitted to motors");
+            "[RATE] Valid mixer output can be transmitted to motor node");
+
+#else
+
+        (void)uart_diag_write_line(
+            "[RATE] Mixer output remains local/diagnostic only");
+
+#endif
 
 #else
 
@@ -4115,11 +4116,6 @@ main(void)
      * ========================================================
      * MOTOR MIXER INITIALIZATION
      * ========================================================
-     *
-     * motor_mixer.c is stateless, so there is no mixer_init().
-     *
-     * Only local and published diagnostic structures need
-     * clearing.
      */
 
 #if MOTOR_MIXER_ENABLE
@@ -4163,16 +4159,65 @@ main(void)
             "[MIXER] M1..M4 normalized outputs available through GDB");
 
 
-        (void)uart_diag_write_line(
-            "[MIXER] No motor-node UART/PWM in this phase");
-
-
 #if MOTOR_MIXER_UART_DEBUG
 
         (void)uart_diag_write_line(
-            "[MIXER] Independent UART debug enabled at 5 Hz");
+            "[MIXER] Independent USART1 debug enabled at 5 Hz");
 
 #endif
+    }
+
+#endif
+
+
+    /*
+     * ========================================================
+     * FMCOM PHASE 6.1
+     * FC -> MOTOR-NODE COMMUNICATION INITIALIZATION
+     * ========================================================
+     *
+     * USART2 is APB1 based, therefore pclk1_hz is supplied.
+     *
+     * The link is TX-only during this phase.
+     */
+
+#if MOTOR_NODE_LINK_ENABLE
+
+    if (motor_node_link_init(
+            pclk1_hz,
+            MOTOR_NODE_LINK_BAUD) !=
+        MOTOR_NODE_LINK_OK)
+    {
+        stop_with_message(
+            "[HALT] Motor-node USART2 link initialization failed");
+    }
+
+
+    if (g_fc_uart_status ==
+        UART_DIAG_OK)
+    {
+        (void)uart_diag_write_string(
+            "[LINK] USART2 FC->motor-node = ");
+
+
+        (void)uart_diag_write_uint32(
+            MOTOR_NODE_LINK_BAUD);
+
+
+        (void)uart_diag_write_line(
+            " baud");
+
+
+        (void)uart_diag_write_line(
+            "[LINK] Valid M1..M4 frames transmitted using DMA");
+
+
+        (void)uart_diag_write_line(
+            "[LINK] No ACK wait in fast control loop");
+
+
+        (void)uart_diag_write_line(
+            "[LINK] Motor-node PWM/arming/watchdog not implemented yet");
     }
 
 #endif
@@ -4499,7 +4544,8 @@ main(void)
 #if ACCEL_PIPELINE_ENABLE
 
             if ((sample.flags &
-                 IMU_RAW_MOTION_VALID) != 0UL)
+                 IMU_RAW_MOTION_VALID) !=
+                0UL)
             {
                 accel_input.sequence =
                     sample.sequence;
@@ -4607,14 +4653,15 @@ main(void)
 
             /*
              * =================================================
-             * GYRO PIPELINE
+             * GYROSCOPE PIPELINE
              * =================================================
              */
 
 #if GYRO_PIPELINE_ENABLE
 
             if ((sample.flags &
-                 IMU_RAW_MOTION_VALID) != 0UL)
+                 IMU_RAW_MOTION_VALID) !=
+                0UL)
             {
                 gyro_input.sequence =
                     sample.sequence;
@@ -4713,14 +4760,15 @@ main(void)
 
             /*
              * =================================================
-             * BODY FRAME + CASCADED CONTROL + ATTITUDE
+             * BODY FRAME + CONTROL + ATTITUDE
              * =================================================
              */
 
 #if ATTITUDE_ESTIMATOR_ENABLE
 
             if ((sample.flags &
-                 IMU_RAW_MOTION_VALID) != 0UL)
+                 IMU_RAW_MOTION_VALID) !=
+                0UL)
             {
                 if (imu_body_frame_from_pipeline(
                         &accel_output,
@@ -4729,7 +4777,7 @@ main(void)
                 {
                     /*
                      * ==========================================
-                     * INNER ANGULAR-RATE CONTROL
+                     * INNER ANGULAR-RATE CONTROLLER
                      * ==========================================
                      */
 
@@ -4782,7 +4830,7 @@ main(void)
 
 
                     /*
-                     * No yaw-heading outer loop yet.
+                     * No yaw-heading outer controller yet.
                      */
                     inner_rate_input
                         .desired_yaw_rate_rad_s =
@@ -4833,22 +4881,23 @@ main(void)
                      * MOTOR MIXER
                      * ==========================================
                      *
-                     * Locked X-frame allocation:
+                     * Finalized physically verified convention:
                      *
-                     * M1 = C - R + P + Y
+                     *     +roll  = right side goes down
+                     *     +pitch = nose/front goes up
+                     *     +yaw   = nose turns right
                      *
-                     * M2 = C + R + P - Y
+                     * Locked allocation:
                      *
-                     * M3 = C + R - P + Y
-                     *
-                     * M4 = C - R - P - Y
+                     * M1 = C + R + P + Y
+                     * M2 = C - R + P - Y
+                     * M3 = C - R - P + Y
+                     * M4 = C + R - P - Y
                      *
                      * M1 = front-left  / CCW
                      * M2 = front-right / CW
                      * M3 = rear-right  / CCW
                      * M4 = rear-left   / CW
-                     *
-                     * The output remains diagnostic only.
                      */
 
 #if MOTOR_MIXER_ENABLE
@@ -4865,24 +4914,17 @@ main(void)
                         inner_rate_output.sample_interval_us;
 
 
-                    /*
-                     * The mixer may produce a valid motor
-                     * allocation only when the current inner
-                     * controller update itself is valid.
-                     */
                     motor_mixer_input.control_valid =
                         inner_rate_output_ready &&
                         ((inner_rate_output.flags &
-                          RATE_CONTROL_VALID) != 0UL);
+                          RATE_CONTROL_VALID) !=
+                         0UL);
 
 
                     /*
-                     * Temporary diagnostic collective.
+                     * Temporary level/sign-test collective.
                      *
-                     * Future:
-                     *
-                     * this value will come from the appropriate
-                     * flight/movement/throttle setpoint layer.
+                     * Movement manager is intentionally bypassed.
                      */
                     motor_mixer_input.collective =
                         MOTOR_MIXER_TEST_COLLECTIVE;
@@ -4904,8 +4946,8 @@ main(void)
 
 
                     /*
-                     * Keep the existing mixer execution exactly
-                     * independent from UART debugging.
+                     * Mixer stays completely independent of the
+                     * communication layer.
                      */
                     (void)motor_mixer_update(
                         &motor_mixer_input,
@@ -4914,6 +4956,36 @@ main(void)
 
                     g_latest_motor_mixer_output =
                         motor_mixer_output;
+
+
+                    /*
+                     * ==========================================
+                     * FC -> MOTOR-NODE COMMUNICATION
+                     * ==========================================
+                     *
+                     * Only valid final M1..M4 commands are passed
+                     * across this boundary.
+                     *
+                     * motor_node_link_send() does not wait for a
+                     * reply and does not wait for physical UART
+                     * transmission to complete.
+                     *
+                     * If USART2 DMA is unexpectedly still busy,
+                     * that command is dropped rather than delaying
+                     * the fast controller.
+                     */
+
+#if MOTOR_NODE_LINK_ENABLE
+
+                    if ((motor_mixer_output.flags &
+                         MOTOR_MIXER_VALID) !=
+                        0UL)
+                    {
+                        (void)motor_node_link_send(
+                            &motor_mixer_output);
+                    }
+
+#endif
 
 #endif
 
@@ -4952,11 +5024,12 @@ main(void)
                           ATTITUDE_INITIALIZED)))
                     {
                         /*
-                         * Run outer controller only when a fresh
-                         * Euler angle calculation exists.
+                         * Outer controller runs only when the
+                         * estimator publishes a fresh Euler result.
                          */
                         if ((attitude_output.flags &
-                             ATTITUDE_EULER_UPDATED) != 0UL)
+                             ATTITUDE_EULER_UPDATED) !=
+                            0UL)
                         {
                             outer_attitude_input.sequence =
                                 attitude_output.sequence;
@@ -4971,10 +5044,9 @@ main(void)
 
 
                             /*
-                             * Current level-hold test.
+                             * Current movement-manager bypass:
                              *
-                             * Future movement manager replaces
-                             * these fixed zero targets.
+                             * level hold only.
                              */
                             outer_attitude_input
                                 .desired_roll_rad =
@@ -5044,11 +5116,6 @@ main(void)
                             }
                             else
                             {
-                                /*
-                                 * Do not retain an old non-zero
-                                 * outer-loop request after an
-                                 * invalid update.
-                                 */
                                 held_roll_rate_setpoint_rad_s =
                                     0.0f;
 
@@ -5060,6 +5127,10 @@ main(void)
                     }
                     else
                     {
+                        /*
+                         * Never retain old non-zero outer-loop
+                         * commands after estimator invalidity.
+                         */
                         held_roll_rate_setpoint_rad_s =
                             0.0f;
 
@@ -5096,7 +5167,7 @@ main(void)
 
                     /*
                      * ==========================================
-                     * EXISTING RAW -> ATTITUDE TIMING
+                     * RAW -> ATTITUDE TIMING
                      * ==========================================
                      */
 
@@ -5122,7 +5193,7 @@ main(void)
 
                     /*
                      * ==========================================
-                     * INNER RATE UART
+                     * INNER RATE UART DEBUG
                      * ==========================================
                      */
 
@@ -5154,18 +5225,20 @@ main(void)
 
                     /*
                      * ==========================================
-                     * MOTOR MIXER UART
+                     * MOTOR MIXER UART DEBUG
                      * ==========================================
                      *
-                     * This is only an observer of the mixer
-                     * output that has already been calculated.
+                     * USART1 debug remains only an observer.
                      *
-                     * The mixer update above is unchanged.
+                     * It is completely separate from the USART2
+                     * binary motor-node link.
                      */
+
 #if MOTOR_MIXER_UART_DEBUG
 
                     if (((motor_mixer_output.flags &
-                          MOTOR_MIXER_VALID) != 0UL) &&
+                          MOTOR_MIXER_VALID) !=
+                         0UL) &&
                         (g_fc_uart_status ==
                          UART_DIAG_OK) &&
                         ((!motor_mixer_uart_timestamp_valid) ||
@@ -5201,7 +5274,8 @@ main(void)
                         if (attitude_output_ready &&
                             !attitude_initialization_reported &&
                             ((attitude_output.flags &
-                              ATTITUDE_INITIALIZED) != 0UL))
+                              ATTITUDE_INITIALIZED) !=
+                             0UL))
                         {
                             (void)uart_diag_write_string(
                                 "[ATT] Initialized angle_deg=");
@@ -5311,7 +5385,7 @@ main(void)
 
 
                 /*
-                 * Only print I2C health when the state changes.
+                 * Print I2C health only when it changes.
                  */
                 if ((i2c_error_count !=
                      previous_i2c_error_count) ||
