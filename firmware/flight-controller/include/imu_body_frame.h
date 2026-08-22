@@ -64,10 +64,11 @@ typedef struct
  *     +Z = down
  *
  *
- * Physical positive rotations used by the current controller:
+ * Finalized physical positive rotations used by the estimator,
+ * controllers and motor mixer:
  *
  *     +roll
- *         left side goes down
+ *         right side goes down
  *
  *     +pitch
  *         nose/front goes up
@@ -77,6 +78,10 @@ typedef struct
  *
  *
  * Important:
+ *
+ * The physical rotation signs above were verified from the
+ * estimator/controller behavior on the current vehicle and are
+ * the control-system convention that downstream modules must use.
  *
  * The raw gyro-pipeline Z sign is not the controller/body-frame
  * yaw sign.
