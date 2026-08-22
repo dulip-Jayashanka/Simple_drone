@@ -402,13 +402,22 @@ motor_mixer_update(
      * LOCKED X-FRAME DIFFERENTIAL ALLOCATION
      * ========================================================
      *
-     * M1 = C - R + P + Y
+     * Finalized physical controller signs:
      *
-     * M2 = C + R + P - Y
+     *     +roll  = right side goes down
+     *     +pitch = nose/front goes up
+     *     +yaw   = nose turns right
      *
-     * M3 = C + R - P + Y
+     * With the locked motor numbering and rotation directions,
+     * the corresponding mixer equations are:
      *
-     * M4 = C - R - P - Y
+     * M1 = C + R + P + Y
+     *
+     * M2 = C - R + P - Y
+     *
+     * M3 = C - R - P + Y
+     *
+     * M4 = C + R - P - Y
      *
      *
      * Calculate only the differential part here.
