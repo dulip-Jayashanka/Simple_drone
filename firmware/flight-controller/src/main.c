@@ -21,6 +21,10 @@
 #include "attitude_controller.h"
 #endif
 
+#if MOTOR_MIXER_ENABLE
+#include "motor_mixer.h"
+#endif
+
 #include "imu_acquisition.h"
 #include "micros.h"
 #include "mpu9250.h"
@@ -243,11 +247,6 @@
 #endif
 
 
-/*
- * Controller runs with every valid gyro sample.
- *
- * UART remains much slower.
- */
 #if INNER_RATE_CONTROL_UART_DEBUG
 
 #define INNER_RATE_CONTROL_UART_PERIOD_US \
@@ -282,9 +281,7 @@
  *      v
  * held rate setpoint for inner PID
  *
- *
  * Yaw heading control is intentionally NOT implemented here.
- *
  * The yaw inner PID continues to receive a direct yaw-rate
  * setpoint.
  */
@@ -317,17 +314,53 @@
 #endif
 
 
-/*
- * Outer control runs on fresh Euler estimates,
- * normally approximately 100 Hz.
- *
- * UART output is intentionally only 2 Hz.
- */
 #if OUTER_ATTITUDE_CONTROL_UART_DEBUG
 
 #define OUTER_ATTITUDE_CONTROL_UART_PERIOD_US \
     500000UL
 
+#endif
+
+
+/*
+ * ============================================================
+ * MOTOR MIXER
+ * ============================================================
+ *
+ * The mixer belongs to the fast control path:
+ *
+ *     inner rate controller
+ *             |
+ *             v
+ *       R / P / Y corrections
+ *             +
+ *         collective C
+ *             |
+ *             v
+ *         motor mixer
+ *             |
+ *             v
+ *       M1 / M2 / M3 / M4
+ *
+ * This phase stops at normalized M1..M4 diagnostics.
+ *
+ * There is NO:
+ *
+ *     FC -> motor-node command transmission
+ *     ESC PWM generation
+ *     motor arming
+ *
+ * in this phase.
+ */
+
+#ifndef MOTOR_MIXER_ENABLE
+#define MOTOR_MIXER_ENABLE 0
+#endif
+
+
+#if MOTOR_MIXER_ENABLE && \
+    !INNER_RATE_CONTROL_ENABLE
+#error "Motor mixer requires INNER_RATE_CONTROL_ENABLE=1"
 #endif
 
 
@@ -365,12 +398,6 @@
 #endif
 
 
-/*
- * Keep existing raw-to-attitude profiler meaning unchanged.
- *
- * Inner/outer control adds additional work and therefore must
- * not be enabled during the existing estimator-only timing test.
- */
 #if MEASURE_RAW_TO_ATTITUDE_TIMES && \
     INNER_RATE_CONTROL_ENABLE
 #error "Raw-to-attitude timing must be measured with INNER_RATE_CONTROL_ENABLE=0"
@@ -645,9 +672,7 @@ volatile rate_controller_output_t
  * Ki = 0
  * Kd = 0
  *
- * makes the first test easy to understand:
- *
- *     output approximately equals rate error.
+ * This remains the existing sign-test configuration.
  */
 
 #define INNER_RATE_TEST_KP \
@@ -753,6 +778,39 @@ inner_rate_source_is_valid(
 
 /*
  * ============================================================
+ * MOTOR MIXER
+ * ============================================================
+ */
+
+#if MOTOR_MIXER_ENABLE
+
+volatile motor_mixer_output_t
+    g_latest_motor_mixer_output;
+
+
+/*
+ * Temporary mathematical base command used only for the mixer
+ * integration test.
+ *
+ * IMPORTANT:
+ *
+ *     0.50 does NOT mean known hover throttle.
+ *
+ *     0.50 is NOT sent to an ESC.
+ *
+ *     0.50 is NOT a flight-tuned value.
+ *
+ * It simply provides a visible center point around which the
+ * roll/pitch/yaw differential corrections can be inspected.
+ */
+#define MOTOR_MIXER_TEST_COLLECTIVE \
+    0.50f
+
+#endif
+
+
+/*
+ * ============================================================
  * OUTER ATTITUDE CONTROLLER
  * ============================================================
  */
@@ -767,17 +825,6 @@ volatile attitude_controller_output_t
  * ------------------------------------------------------------
  * TEMPORARY LEVEL-HOLD TEST PARAMETERS
  * ------------------------------------------------------------
- *
- * NOT FLIGHT-TUNED VALUES.
- *
- * gain = 1 / second
- *
- * gives:
- *
- *     desired rate rad/s =
- *         angle error rad
- *
- * which makes sign checking easy.
  */
 
 #define OUTER_ATTITUDE_TEST_ROLL_GAIN_PER_S \
@@ -787,13 +834,6 @@ volatile attitude_controller_output_t
     1.0f
 
 
-/*
- * 1 rad/s is approximately 57.3 degrees/s.
- *
- * Diagnostic rate cap only.
- *
- * It is NOT the final flight rate limit.
- */
 #define OUTER_ATTITUDE_TEST_MAX_ROLL_RATE_RAD_S \
     1.0f
 
@@ -2386,11 +2426,6 @@ run_accel_capture_test(void)
             false;
 
 
-        /*
-         * Capture phase.
-         *
-         * No UART transmission occurs here.
-         */
         for (;;)
         {
             g_imu_acquisition_status =
@@ -2467,9 +2502,6 @@ run_accel_capture_test(void)
         }
 
 
-        /*
-         * Transmission only after capture has finished.
-         */
         if (g_fc_uart_status ==
             UART_DIAG_OK)
         {
@@ -2927,32 +2959,42 @@ mpu_who_am_i_test(
         switch (detected_id)
         {
             case 0x68U:
+
                 (void)uart_diag_write_line(
                     "[WHO_AM_I TEST] Possible MPU6050");
+
                 break;
 
 
             case 0x70U:
+
                 (void)uart_diag_write_line(
                     "[WHO_AM_I TEST] Possible MPU6500");
+
                 break;
 
 
             case 0x71U:
+
                 (void)uart_diag_write_line(
                     "[WHO_AM_I TEST] MPU9250 identity detected");
+
                 break;
 
 
             case 0x73U:
+
                 (void)uart_diag_write_line(
                     "[WHO_AM_I TEST] Possible MPU9255");
+
                 break;
 
 
             default:
+
                 (void)uart_diag_write_line(
                     "[WHO_AM_I TEST] Unknown identity value");
+
                 break;
         }
     }
@@ -3091,10 +3133,20 @@ main(void)
         inner_rate_output;
 
 
-#if INNER_RATE_CONTROL_UART_DEBUG
+#if INNER_RATE_CONTROL_UART_DEBUG || \
+    MOTOR_MIXER_ENABLE
 
+    /*
+     * Mixer also needs the success/failure state of the current
+     * rate-controller update.
+     */
     bool
         inner_rate_output_ready;
+
+#endif
+
+
+#if INNER_RATE_CONTROL_UART_DEBUG
 
     uint32_t
         inner_rate_previous_uart_timestamp_us;
@@ -3103,6 +3155,23 @@ main(void)
         inner_rate_uart_timestamp_valid;
 
 #endif
+
+#endif
+
+
+/*
+ * ------------------------------------------------------------
+ * MOTOR MIXER LOCAL STATE
+ * ------------------------------------------------------------
+ */
+
+#if MOTOR_MIXER_ENABLE
+
+    motor_mixer_input_t
+        motor_mixer_input;
+
+    motor_mixer_output_t
+        motor_mixer_output;
 
 #endif
 
@@ -3129,13 +3198,6 @@ main(void)
         outer_attitude_output_ready;
 
 
-    /*
-     * The approximately 100 Hz outer controller writes these
-     * values.
-     *
-     * The approximately 500 Hz inner controller reads and holds
-     * them until the next fresh outer update.
-     */
     float
         held_roll_rate_setpoint_rad_s;
 
@@ -3768,11 +3830,16 @@ main(void)
         (rate_controller_output_t){0};
 
 
-#if INNER_RATE_CONTROL_UART_DEBUG
+#if INNER_RATE_CONTROL_UART_DEBUG || \
+    MOTOR_MIXER_ENABLE
 
     inner_rate_output_ready =
         false;
 
+#endif
+
+
+#if INNER_RATE_CONTROL_UART_DEBUG
 
     inner_rate_previous_uart_timestamp_us =
         0UL;
@@ -3812,8 +3879,68 @@ main(void)
             "[RATE] Sign-test gains Kp=1 Ki=0 Kd=0");
 
 
+#if MOTOR_MIXER_ENABLE
+
+        (void)uart_diag_write_line(
+            "[RATE] Outputs feed diagnostic motor mixer");
+
+
+        (void)uart_diag_write_line(
+            "[RATE] Mixer output is NOT transmitted to motors");
+
+#else
+
         (void)uart_diag_write_line(
             "[RATE] Outputs diagnostic only; no mixer or motors");
+
+#endif
+    }
+
+#endif
+
+
+    /*
+     * ========================================================
+     * MOTOR MIXER INITIALIZATION
+     * ========================================================
+     *
+     * motor_mixer.c is stateless, so there is no mixer_init().
+     *
+     * Only local and published diagnostic structures need
+     * clearing.
+     */
+
+#if MOTOR_MIXER_ENABLE
+
+    motor_mixer_input =
+        (motor_mixer_input_t){0};
+
+
+    motor_mixer_output =
+        (motor_mixer_output_t){0};
+
+
+    g_latest_motor_mixer_output =
+        (motor_mixer_output_t){0};
+
+
+    if (g_fc_uart_status ==
+        UART_DIAG_OK)
+    {
+        (void)uart_diag_write_line(
+            "[MIXER] X-frame mixer enabled");
+
+
+        (void)uart_diag_write_line(
+            "[MIXER] Test collective C=0.500; NOT hover tuned");
+
+
+        (void)uart_diag_write_line(
+            "[MIXER] M1..M4 normalized outputs available through GDB");
+
+
+        (void)uart_diag_write_line(
+            "[MIXER] No motor-node UART/PWM in this phase");
     }
 
 #endif
@@ -3855,10 +3982,6 @@ main(void)
         false;
 
 
-    /*
-     * Before the estimator supplies a valid Euler attitude,
-     * request zero roll/pitch rotation.
-     */
     held_roll_rate_setpoint_rad_s =
         0.0f;
 
@@ -4376,17 +4499,6 @@ main(void)
                      * ==========================================
                      * INNER ANGULAR-RATE CONTROL
                      * ==========================================
-                     *
-                     * Fast loop:
-                     *
-                     * approximately 500 Hz.
-                     *
-                     * When outer control is enabled:
-                     *
-                     * roll/pitch desired rates come from the
-                     * most recently held outer-loop output.
-                     *
-                     * Yaw remains a direct zero rate request.
                      */
 
 #if INNER_RATE_CONTROL_ENABLE
@@ -4412,12 +4524,6 @@ main(void)
                         body_sample.dt_s;
 
 
-                    /*
-                     * ------------------------------------------
-                     * DESIRED ROLL/PITCH RATE SOURCE
-                     * ------------------------------------------
-                     */
-
 #if OUTER_ATTITUDE_CONTROL_ENABLE
 
                     inner_rate_input
@@ -4431,9 +4537,6 @@ main(void)
 
 #else
 
-                    /*
-                     * Preserve previous inner-loop-only test.
-                     */
                     inner_rate_input
                         .desired_roll_rate_rad_s =
                         0.0f;
@@ -4447,18 +4550,13 @@ main(void)
 
 
                     /*
-                     * No yaw heading outer loop yet.
-                     *
-                     * Direct yaw-rate command remains zero.
+                     * No yaw-heading outer loop yet.
                      */
                     inner_rate_input
                         .desired_yaw_rate_rad_s =
                         0.0f;
 
 
-                    /*
-                     * Real processed body-frame gyro rates.
-                     */
                     inner_rate_input
                         .measured_roll_rate_rad_s =
                         body_sample
@@ -4477,7 +4575,8 @@ main(void)
                             .angular_rate_z_rad_s;
 
 
-#if INNER_RATE_CONTROL_UART_DEBUG
+#if INNER_RATE_CONTROL_UART_DEBUG || \
+    MOTOR_MIXER_ENABLE
 
                     inner_rate_output_ready =
                         rate_controller_update(
@@ -4496,6 +4595,97 @@ main(void)
                     g_latest_rate_controller_output =
                         inner_rate_output;
 
+
+                    /*
+                     * ==========================================
+                     * MOTOR MIXER
+                     * ==========================================
+                     *
+                     * Locked X-frame allocation:
+                     *
+                     * M1 = C - R + P + Y
+                     *
+                     * M2 = C + R + P - Y
+                     *
+                     * M3 = C + R - P + Y
+                     *
+                     * M4 = C - R - P - Y
+                     *
+                     * M1 = front-left  / CCW
+                     * M2 = front-right / CW
+                     * M3 = rear-right  / CCW
+                     * M4 = rear-left   / CW
+                     *
+                     * The output remains diagnostic only.
+                     */
+
+#if MOTOR_MIXER_ENABLE
+
+                    motor_mixer_input.sequence =
+                        inner_rate_output.sequence;
+
+
+                    motor_mixer_input.timestamp_us =
+                        inner_rate_output.timestamp_us;
+
+
+                    motor_mixer_input.sample_interval_us =
+                        inner_rate_output.sample_interval_us;
+
+
+                    /*
+                     * The mixer may produce a valid motor
+                     * allocation only when the current inner
+                     * controller update itself is valid.
+                     */
+                    motor_mixer_input.control_valid =
+                        inner_rate_output_ready &&
+                        ((inner_rate_output.flags &
+                          RATE_CONTROL_VALID) != 0UL);
+
+
+                    /*
+                     * Temporary diagnostic collective.
+                     *
+                     * Future:
+                     *
+                     * this value will come from the appropriate
+                     * flight/movement/throttle setpoint layer.
+                     */
+                    motor_mixer_input.collective =
+                        MOTOR_MIXER_TEST_COLLECTIVE;
+
+
+                    motor_mixer_input.roll_correction =
+                        inner_rate_output
+                            .roll.output;
+
+
+                    motor_mixer_input.pitch_correction =
+                        inner_rate_output
+                            .pitch.output;
+
+
+                    motor_mixer_input.yaw_correction =
+                        inner_rate_output
+                            .yaw.output;
+
+
+                    /*
+                     * Publish every attempted mixer calculation
+                     * so both accepted and rejected states can
+                     * be inspected with GDB.
+                     */
+                    (void)motor_mixer_update(
+                        &motor_mixer_input,
+                        &motor_mixer_output);
+
+
+                    g_latest_motor_mixer_output =
+                        motor_mixer_output;
+
+#endif
+
 #endif
 
 
@@ -4503,12 +4693,6 @@ main(void)
                      * ==========================================
                      * ATTITUDE ESTIMATOR
                      * ==========================================
-                     *
-                     * Quaternion propagation remains near
-                     * sensor rate.
-                     *
-                     * Euler roll/pitch/yaw are calculated at
-                     * ATTITUDE_EULER_RATE_HZ.
                      */
 
                     attitude_output_ready =
@@ -4525,15 +4709,6 @@ main(void)
                      * ==========================================
                      * OUTER ROLL/PITCH ATTITUDE CONTROL
                      * ==========================================
-                     *
-                     * Executes only on a NEW Euler angle.
-                     *
-                     * At ATTITUDE_EULER_RATE_HZ=100 this is
-                     * approximately every 10 ms.
-                     *
-                     * The output becomes the held roll/pitch
-                     * rate setpoints used by following inner
-                     * rate-control samples.
                      */
 
 #if OUTER_ATTITUDE_CONTROL_ENABLE
@@ -4546,8 +4721,8 @@ main(void)
                           ATTITUDE_INITIALIZED)))
                     {
                         /*
-                         * Run outer controller only when a
-                         * fresh Euler calculation exists.
+                         * Run outer controller only when a fresh
+                         * Euler angle calculation exists.
                          */
                         if ((attitude_output.flags &
                              ATTITUDE_EULER_UPDATED) != 0UL)
@@ -4565,14 +4740,10 @@ main(void)
 
 
                             /*
-                             * ----------------------------------
-                             * LEVEL-HOLD TEST SETPOINT
-                             * ----------------------------------
+                             * Current level-hold test.
                              *
-                             * Future:
-                             *
-                             * these values will come from the
-                             * movement/setpoint manager.
+                             * Future movement manager replaces
+                             * these fixed zero targets.
                              */
                             outer_attitude_input
                                 .desired_roll_rad =
@@ -4584,9 +4755,6 @@ main(void)
                                 0.0f;
 
 
-                            /*
-                             * Estimated attitude feedback.
-                             */
                             outer_attitude_input
                                 .estimated_roll_rad =
                                 attitude_output.roll_rad;
@@ -4603,21 +4771,12 @@ main(void)
                                     &outer_attitude_output);
 
 
-                            /*
-                             * Publish every attempted outer
-                             * update for GDB inspection.
-                             */
                             g_latest_attitude_controller_output =
                                 outer_attitude_output;
 
 
                             if (outer_attitude_output_ready)
                             {
-                                /*
-                                 * --------------------------------
-                                 * HOLD NEW RATE SETPOINTS
-                                 * --------------------------------
-                                 */
                                 held_roll_rate_setpoint_rad_s =
                                     outer_attitude_output
                                         .desired_roll_rate_rad_s;
@@ -4655,11 +4814,9 @@ main(void)
                             else
                             {
                                 /*
-                                 * Failed calculation:
-                                 *
-                                 * do not continue using an old
-                                 * non-zero attitude-generated
-                                 * rate request.
+                                 * Do not retain an old non-zero
+                                 * outer-loop request after an
+                                 * invalid update.
                                  */
                                 held_roll_rate_setpoint_rad_s =
                                     0.0f;
@@ -4672,12 +4829,6 @@ main(void)
                     }
                     else
                     {
-                        /*
-                         * Current attitude state is not valid.
-                         *
-                         * Remove outer-generated roll/pitch
-                         * rate demands.
-                         */
                         held_roll_rate_setpoint_rad_s =
                             0.0f;
 
@@ -4686,12 +4837,6 @@ main(void)
                             0.0f;
 
 
-                        /*
-                         * Forget outer sequence history.
-                         *
-                         * A recovered fresh Euler sample can
-                         * therefore be accepted immediately.
-                         */
                         attitude_controller_reset();
 
 

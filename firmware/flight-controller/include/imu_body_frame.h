@@ -7,48 +7,99 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+
 typedef struct
 {
     uint32_t accel_sequence;
+
     uint32_t gyro_sequence;
+
     uint32_t timestamp_us;
+
     uint32_t sample_interval_us;
+
     uint32_t accel_flags;
+
     uint32_t gyro_flags;
+
 
     float dt_s;
 
-    /* Accelerometer specific force in the drone body frame, in g. */
+
+    /*
+     * Accelerometer specific force in the drone body frame,
+     * in g.
+     */
     float specific_force_x_g;
+
     float specific_force_y_g;
+
     float specific_force_z_g;
 
-    /* Body angular rates p, q and r, in radians/second. */
+
+    /*
+     * Body angular rates p, q and r,
+     * in radians/second.
+     */
     float angular_rate_x_rad_s;
+
     float angular_rate_y_rad_s;
+
     float angular_rate_z_rad_s;
+
 } imu_body_sample_t;
 
+
 /*
- * Convert processed sensor-frame outputs into the drone body frame.
+ * Convert processed sensor-frame outputs into the drone body
+ * frame.
  *
- * The roll/pitch convention below is based on physical validation on the
+ * The convention below is based on physical validation on the
  * current vehicle:
  *
- *   +X = nose/forward
- *   +Y = drone left
- *   +Z = down
+ *     +X = nose/forward
  *
- *   +roll  = left side goes down
- *   +pitch = nose/front goes up
+ *     +Y = drone left
  *
- * Yaw sign is intentionally not stated here yet. It must be physically
- * validated and locked together with the final CW/CCW motor convention
- * before the yaw mixer signs are finalized.
+ *     +Z = down
+ *
+ *
+ * Physical positive rotations used by the current controller:
+ *
+ *     +roll
+ *         left side goes down
+ *
+ *     +pitch
+ *         nose/front goes up
+ *
+ *     +yaw
+ *         nose turns right
+ *
+ *
+ * Important:
+ *
+ * The raw gyro-pipeline Z sign is not the controller/body-frame
+ * yaw sign.
+ *
+ * On the current hardware:
+ *
+ *     nose right
+ *
+ *         raw gyro-pipeline Z = negative
+ *
+ *         after body-frame Z inversion = positive
+ *
+ *         estimator yaw = positive
+ *
+ *
+ * The controller and motor mixer therefore use:
+ *
+ *     +yaw = nose turns right
  */
 bool imu_body_frame_from_pipeline(
     const accel_pipeline_output_t *accel,
     const gyro_pipeline_output_t *gyro,
     imu_body_sample_t *body);
+
 
 #endif /* IMU_BODY_FRAME_H */

@@ -32,6 +32,9 @@ INNER_RATE_CONTROL_UART_DEBUG ?= 0
 OUTER_ATTITUDE_CONTROL_ENABLE ?= 0
 OUTER_ATTITUDE_CONTROL_UART_DEBUG ?= 0
 
+# Flight-controller motor mixer.
+MOTOR_MIXER_ENABLE ?= 0
+
 MEASURE_PIPELINE_TIMES ?= 0
 MEASURE_RAW_TO_ATTITUDE_TIMES ?= 0
 
@@ -60,6 +63,7 @@ BOOLEAN_BUILD_VALUES := \
 	$(INNER_RATE_CONTROL_UART_DEBUG) \
 	$(OUTER_ATTITUDE_CONTROL_ENABLE) \
 	$(OUTER_ATTITUDE_CONTROL_UART_DEBUG) \
+	$(MOTOR_MIXER_ENABLE) \
 	$(MEASURE_PIPELINE_TIMES) \
 	$(MEASURE_RAW_TO_ATTITUDE_TIMES) \
 	$(ACCEL_PIPELINE_DEBUG_RAW) \
@@ -173,6 +177,20 @@ ifeq ($(OUTER_ATTITUDE_CONTROL_UART_DEBUG),1)
 
 ifneq ($(OUTER_ATTITUDE_CONTROL_ENABLE),1)
 $(error OUTER_ATTITUDE_CONTROL_UART_DEBUG requires OUTER_ATTITUDE_CONTROL_ENABLE=1)
+endif
+
+endif
+
+
+#
+# The motor mixer consumes the abstract roll/pitch/yaw corrections
+# produced by the inner angular-rate controller and combines them
+# with collective.
+#
+ifeq ($(MOTOR_MIXER_ENABLE),1)
+
+ifneq ($(INNER_RATE_CONTROL_ENABLE),1)
+$(error MOTOR_MIXER_ENABLE requires INNER_RATE_CONTROL_ENABLE=1)
 endif
 
 endif
@@ -317,6 +335,7 @@ CFLAGS := $(CPU_FLAGS) \
 	-DINNER_RATE_CONTROL_UART_DEBUG=$(INNER_RATE_CONTROL_UART_DEBUG) \
 	-DOUTER_ATTITUDE_CONTROL_ENABLE=$(OUTER_ATTITUDE_CONTROL_ENABLE) \
 	-DOUTER_ATTITUDE_CONTROL_UART_DEBUG=$(OUTER_ATTITUDE_CONTROL_UART_DEBUG) \
+	-DMOTOR_MIXER_ENABLE=$(MOTOR_MIXER_ENABLE) \
 	-DMEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES) \
 	-DMEASURE_RAW_TO_ATTITUDE_TIMES=$(MEASURE_RAW_TO_ATTITUDE_TIMES) \
 	-DACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW) \
@@ -392,11 +411,18 @@ SOURCES += src/attitude_controller.c
 endif
 
 
+ifeq ($(MOTOR_MIXER_ENABLE),1)
+
+SOURCES += src/motor_mixer.c
+
+endif
+
+
 OBJECTS := \
 	$(addprefix $(BUILD_DIR)/,$(notdir $(SOURCES:.c=.o)))
 
 
-DEPS := $(OBJECTS:.o=.d)
+DEPS := $(OBJECTS:.o.d)
 
 CONFIG_STAMP := $(BUILD_DIR)/.build-config
 
@@ -414,6 +440,7 @@ HEX := $(BUILD_DIR)/$(PROJECT).hex
 	test-pid-host \
 	test-rate-host \
 	test-attitude-controller-host \
+	test-mixer-host \
 	FORCE
 
 
@@ -450,6 +477,7 @@ $(CONFIG_STAMP): FORCE | $(BUILD_DIR)
 		'INNER_RATE_CONTROL_UART_DEBUG=$(INNER_RATE_CONTROL_UART_DEBUG)' \
 		'OUTER_ATTITUDE_CONTROL_ENABLE=$(OUTER_ATTITUDE_CONTROL_ENABLE)' \
 		'OUTER_ATTITUDE_CONTROL_UART_DEBUG=$(OUTER_ATTITUDE_CONTROL_UART_DEBUG)' \
+		'MOTOR_MIXER_ENABLE=$(MOTOR_MIXER_ENABLE)' \
 		'MEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES)' \
 		'MEASURE_RAW_TO_ATTITUDE_TIMES=$(MEASURE_RAW_TO_ATTITUDE_TIMES)' \
 		'ACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW)' \
@@ -494,7 +522,7 @@ size: $(ELF)
 inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(NM) -n $(ELF) | grep -E \
-		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|attitude_controller_update|rate_controller_update|g_latest_raw_imu_sample|g_latest_gyro_pipeline_output|g_latest_attitude_estimator_output|g_latest_attitude_controller_output|g_latest_rate_controller_output|g_raw_to_attitude_timing|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
+		'EXTI0_IRQHandler|TIM2_IRQHandler|imu_acquisition_process|attitude_controller_update|rate_controller_update|motor_mixer_update|g_latest_raw_imu_sample|g_latest_gyro_pipeline_output|g_latest_attitude_estimator_output|g_latest_attitude_controller_output|g_latest_rate_controller_output|g_latest_motor_mixer_output|g_raw_to_attitude_timing|g_imu_acquisition_stats|g_pipeline_time_|g_i2c1_diag|micros|i2c1_read_registers|i2c1_recover'
 
 
 test-host:
@@ -616,6 +644,23 @@ test-attitude-controller-host:
 		-lm \
 		-o build/host/attitude_controller_test
 	./build/host/attitude_controller_test
+
+
+test-mixer-host:
+	mkdir -p build/host
+	$(HOST_CC) \
+		-std=c11 \
+		-Wall \
+		-Wextra \
+		-Werror \
+		-O0 \
+		-g3 \
+		-Iinclude \
+		tests/motor_mixer_test.c \
+		src/motor_mixer.c \
+		-lm \
+		-o build/host/motor_mixer_test
+	./build/host/motor_mixer_test
 
 
 clean:
