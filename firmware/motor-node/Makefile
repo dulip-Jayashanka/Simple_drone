@@ -24,6 +24,11 @@
 #
 #   make MOTOR_NODE_LINK_ENABLE=1
 #
+# Enable the independent USART1 debug observer for validated received
+# M1..M4 commands with:
+#
+#   make MOTOR_NODE_LINK_ENABLE=1 MOTOR_NODE_LINK_UART_DEBUG=1
+#
 
 PROJECT := motor-node
 
@@ -41,9 +46,32 @@ FAULT_TEST_MODE ?= 0
 MOTOR_NODE_LINK_ENABLE ?= 0
 MOTOR_NODE_LINK_BAUD ?= 230400
 
+# Independent USART1 observer for validated motor commands received over
+# the USART2 motor-node link.
+#
+# This debug path does not alter command_receiver, motor_node_state or the
+# motor outputs. It is deliberately rate-limited because uart_diag uses
+# polling writes.
+MOTOR_NODE_LINK_UART_DEBUG ?= 0
+MOTOR_NODE_LINK_UART_RATE_HZ ?= 10
+
 
 ifneq ($(filter-out 0 1,$(MOTOR_NODE_LINK_ENABLE)),)
 $(error MOTOR_NODE_LINK_ENABLE must be 0 or 1)
+endif
+
+
+ifneq ($(filter-out 0 1,$(MOTOR_NODE_LINK_UART_DEBUG)),)
+$(error MOTOR_NODE_LINK_UART_DEBUG must be 0 or 1)
+endif
+
+
+ifeq ($(MOTOR_NODE_LINK_UART_DEBUG),1)
+
+ifneq ($(MOTOR_NODE_LINK_ENABLE),1)
+$(error MOTOR_NODE_LINK_UART_DEBUG requires MOTOR_NODE_LINK_ENABLE=1)
+endif
+
 endif
 
 
@@ -131,6 +159,8 @@ CFLAGS := \
 	-DFAULT_TEST_MODE=$(FAULT_TEST_MODE) \
 	-DMOTOR_NODE_LINK_ENABLE=$(MOTOR_NODE_LINK_ENABLE) \
 	-DMOTOR_NODE_LINK_BAUD=$(MOTOR_NODE_LINK_BAUD) \
+	-DMOTOR_NODE_LINK_UART_DEBUG=$(MOTOR_NODE_LINK_UART_DEBUG) \
+	-DMOTOR_NODE_LINK_UART_RATE_HZ=$(MOTOR_NODE_LINK_UART_RATE_HZ) \
 	-I$(INC_DIR) \
 	-I$(TEST_DIR) \
 	-I$(PLATFORM_DIR)/include \
@@ -199,6 +229,8 @@ $(CONFIG_STAMP): FORCE | $(BUILD_DIR)
 		'FAULT_TEST_MODE=$(FAULT_TEST_MODE)' \
 		'MOTOR_NODE_LINK_ENABLE=$(MOTOR_NODE_LINK_ENABLE)' \
 		'MOTOR_NODE_LINK_BAUD=$(MOTOR_NODE_LINK_BAUD)' \
+		'MOTOR_NODE_LINK_UART_DEBUG=$(MOTOR_NODE_LINK_UART_DEBUG)' \
+		'MOTOR_NODE_LINK_UART_RATE_HZ=$(MOTOR_NODE_LINK_UART_RATE_HZ)' \
 		> $@.tmp
 	@if ! cmp -s $@.tmp $@; then mv $@.tmp $@; else rm -f $@.tmp; fi
 
