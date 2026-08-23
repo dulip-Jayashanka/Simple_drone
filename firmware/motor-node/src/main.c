@@ -7,6 +7,44 @@
 #error "MOTOR_NODE_LINK_ENABLE must be 0 or 1"
 #endif
 
+
+#ifndef MOTOR_NODE_LINK_UART_DEBUG
+#define MOTOR_NODE_LINK_UART_DEBUG 0
+#endif
+
+#if (MOTOR_NODE_LINK_UART_DEBUG != 0) && \
+    (MOTOR_NODE_LINK_UART_DEBUG != 1)
+#error "MOTOR_NODE_LINK_UART_DEBUG must be 0 or 1"
+#endif
+
+
+#ifndef MOTOR_NODE_LINK_UART_RATE_HZ
+#define MOTOR_NODE_LINK_UART_RATE_HZ 10
+#endif
+
+
+#if MOTOR_NODE_LINK_UART_DEBUG && \
+    !MOTOR_NODE_LINK_ENABLE
+#error "MOTOR_NODE_LINK_UART_DEBUG requires MOTOR_NODE_LINK_ENABLE=1"
+#endif
+
+
+#if MOTOR_NODE_LINK_UART_DEBUG && \
+    ((MOTOR_NODE_LINK_UART_RATE_HZ < 1) || \
+     (MOTOR_NODE_LINK_UART_RATE_HZ > 100))
+#error "MOTOR_NODE_LINK_UART_RATE_HZ must be from 1 to 100"
+#endif
+
+
+#if MOTOR_NODE_LINK_UART_DEBUG
+
+#define MOTOR_NODE_LINK_UART_PERIOD_MS \
+    (1000UL / \
+     (uint32_t)MOTOR_NODE_LINK_UART_RATE_HZ)
+
+#endif
+
+
 #if MOTOR_NODE_LINK_ENABLE
 #include "command_receiver.h"
 #include "uart2_link.h"
@@ -132,6 +170,104 @@ uart_diag_write_value_line(
 }
 
 
+#if MOTOR_NODE_LINK_UART_DEBUG
+
+/*
+ * ============================================================
+ * RECEIVED MOTOR-COMMAND UART DEBUG
+ * ============================================================
+ *
+ * USART1 human-readable observer for commands that have already
+ * been received over USART2 and accepted by command_receiver.
+ *
+ * Printed M1..M4 values are protocol-domain values:
+ *
+ *     0 ... 1000
+ *
+ * They are NOT PWM pulse widths.
+ *
+ * This debug helper does not change the command receiver, state
+ * machine, safety enforcement or motor outputs.
+ */
+static void
+motor_node_link_uart_write_received(
+    const command_receiver_output_t *output)
+{
+    if (output ==
+        (const command_receiver_output_t *)0)
+    {
+        return;
+    }
+
+
+    uart_diag_record_result(
+        uart_diag_write_string(
+            "[MOTOR RX] seq="));
+
+
+    uart_diag_record_result(
+        uart_diag_write_uint32(
+            output->sequence));
+
+
+    uart_diag_record_result(
+        uart_diag_write_string(
+            " M="));
+
+
+    uart_diag_record_result(
+        uart_diag_write_uint32(
+            (uint32_t)output->m1));
+
+
+    uart_diag_record_result(
+        uart_diag_write_char(
+            ','));
+
+
+    uart_diag_record_result(
+        uart_diag_write_uint32(
+            (uint32_t)output->m2));
+
+
+    uart_diag_record_result(
+        uart_diag_write_char(
+            ','));
+
+
+    uart_diag_record_result(
+        uart_diag_write_uint32(
+            (uint32_t)output->m3));
+
+
+    uart_diag_record_result(
+        uart_diag_write_char(
+            ','));
+
+
+    uart_diag_record_result(
+        uart_diag_write_uint32(
+            (uint32_t)output->m4));
+
+
+    uart_diag_record_result(
+        uart_diag_write_string(
+            " rx_ms="));
+
+
+    uart_diag_record_result(
+        uart_diag_write_uint32(
+            output->received_timestamp_ms));
+
+
+    uart_diag_record_result(
+        uart_diag_write_string(
+            "\r\n"));
+}
+
+#endif
+
+
 int
 main(void)
 {
@@ -140,6 +276,23 @@ main(void)
 
     uint32_t
         current_time_ms;
+
+
+#if MOTOR_NODE_LINK_UART_DEBUG
+
+    uint32_t
+        motor_node_link_previous_uart_ms;
+
+    uint32_t
+        accepted_command_count;
+
+    bool
+        motor_node_link_uart_timestamp_valid;
+
+    command_receiver_output_t
+        motor_node_link_uart_output;
+
+#endif
 
 
     /*
@@ -487,6 +640,26 @@ main(void)
     }
 
 
+#if MOTOR_NODE_LINK_UART_DEBUG
+
+    motor_node_link_previous_uart_ms =
+        0UL;
+
+
+    accepted_command_count =
+        0UL;
+
+
+    motor_node_link_uart_timestamp_valid =
+        false;
+
+
+    motor_node_link_uart_output =
+        (command_receiver_output_t){0};
+
+#endif
+
+
     if (g_uart_diag_status ==
         UART_DIAG_OK)
     {
@@ -499,6 +672,16 @@ main(void)
         uart_diag_record_result(
             uart_diag_write_line(
                 "[LINK] Receive/validate only; PWM remains disabled"));
+
+
+#if MOTOR_NODE_LINK_UART_DEBUG
+
+        uart_diag_write_value_line(
+            "[MOTOR RX] USART1 debug rate = ",
+            MOTOR_NODE_LINK_UART_RATE_HZ,
+            " Hz");
+
+#endif
     }
 
 #endif
@@ -598,8 +781,49 @@ main(void)
          * Therefore receipt of even a valid packet cannot cause
          * an ESC or motor output during Phase 6.1.
          */
+
+#if MOTOR_NODE_LINK_UART_DEBUG
+
+        accepted_command_count =
+            command_receiver_process(
+                current_time_ms);
+
+
+        /*
+         * USART1 debug is only an observer of newly accepted
+         * received commands. The receive/validation path above is
+         * identical regardless of whether debug is enabled.
+         */
+        if ((accepted_command_count !=
+             0UL) &&
+            (g_uart_diag_status ==
+             UART_DIAG_OK) &&
+            ((!motor_node_link_uart_timestamp_valid) ||
+             ((uint32_t)(
+                  current_time_ms -
+                  motor_node_link_previous_uart_ms) >=
+              MOTOR_NODE_LINK_UART_PERIOD_MS)) &&
+            command_receiver_get_latest(
+                &motor_node_link_uart_output))
+        {
+            motor_node_link_uart_write_received(
+                &motor_node_link_uart_output);
+
+
+            motor_node_link_previous_uart_ms =
+                current_time_ms;
+
+
+            motor_node_link_uart_timestamp_valid =
+                true;
+        }
+
+#else
+
         (void)command_receiver_process(
             current_time_ms);
+
+#endif
 
 #endif
 
