@@ -33,6 +33,14 @@ static uint32_t
     arm_guard_frames_remaining;
 
 
+#if MOTOR_ARM_BENCH_TEST
+
+static bool
+    motor_arm_bench_request_issued;
+
+#endif
+
+
 static bool
 normalized_motor_value_is_valid(
     float value)
@@ -129,6 +137,14 @@ motor_node_link_init(
         0UL;
 
 
+#if MOTOR_ARM_BENCH_TEST
+
+    motor_arm_bench_request_issued =
+        false;
+
+#endif
+
+
     g_motor_node_link_diag =
         (motor_node_link_diag_t){0};
 
@@ -203,6 +219,29 @@ motor_node_link_set_requested_state(
             record_status(
                 MOTOR_NODE_LINK_STATE_INVALID);
     }
+
+
+#if MOTOR_ARM_BENCH_TEST
+
+    /*
+     * Any ARM request consumes the one-shot bench ARM source.
+     *
+     * Therefore a later explicit DISARM can never be followed by an
+     * unexpected automatic re-arm from this temporary test mode.
+     */
+    if (requested_state ==
+        MOTOR_LINK_REQUEST_ARMED)
+    {
+        motor_arm_bench_request_issued =
+            true;
+
+
+        g_motor_node_link_diag
+            .bench_arm_request_issued =
+            1UL;
+    }
+
+#endif
 
 
     if (requested_state ==
@@ -499,6 +538,52 @@ motor_node_link_send(
     g_motor_node_link_diag
         .arm_guard_frames_remaining =
         arm_guard_frames_remaining;
+
+
+#if MOTOR_ARM_BENCH_TEST
+
+    /*
+     * Temporary one-shot pilot substitute for Phase 6.3 bench work.
+     *
+     * Count only successful DISARMED transmissions. A busy DMA or TX
+     * failure therefore cannot shorten the safe DISARMED interval.
+     *
+     * The transition is requested only after the current DISARMED
+     * frame has started transmitting, so the next packet is the first
+     * ARMED + zero-command guard packet.
+     */
+    if ((!motor_arm_bench_request_issued) &&
+        (command.requested_state ==
+         MOTOR_LINK_REQUEST_DISARMED) &&
+        (g_motor_node_link_diag
+             .disarmed_zero_frame_count >=
+         (uint32_t)
+         MOTOR_ARM_BENCH_DISARMED_FRAMES))
+    {
+        uint32_t
+            trigger_count;
+
+
+        trigger_count =
+            g_motor_node_link_diag
+                .disarmed_zero_frame_count;
+
+
+        if (motor_node_link_set_requested_state(
+                MOTOR_LINK_REQUEST_ARMED) ==
+            MOTOR_NODE_LINK_OK)
+        {
+            g_motor_node_link_diag
+                .bench_arm_request_count++;
+
+
+            g_motor_node_link_diag
+                .bench_arm_trigger_disarmed_frame_count =
+                trigger_count;
+        }
+    }
+
+#endif
 
 
     return
