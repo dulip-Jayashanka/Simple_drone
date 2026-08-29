@@ -1,6 +1,8 @@
 #ifndef COMMAND_RECEIVER_H
 #define COMMAND_RECEIVER_H
 
+#include "motor_link_protocol.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -13,6 +15,10 @@
  *      0 ... 1000
  *
  * They are NOT PWM pulse widths.
+ *
+ * requested_state is the FC request carried in the same validated
+ * MOTOR_COMMAND frame. The motor-node state gate decides whether that
+ * request is safe to apply.
  */
 typedef struct
 {
@@ -23,6 +29,10 @@ typedef struct
     uint16_t m2;
     uint16_t m3;
     uint16_t m4;
+
+
+    motor_link_requested_state_t
+        requested_state;
 
 
     uint32_t received_timestamp_ms;
@@ -58,6 +68,8 @@ typedef struct
     uint32_t crc_error_count;
 
     uint32_t range_error_count;
+
+    uint32_t state_error_count;
 
 
     uint32_t duplicate_sequence_count;
@@ -119,6 +131,7 @@ command_receiver_process(
  *     length
  *     CRC
  *     motor ranges
+ *     requested-state validation
  *     sequence freshness
  */
 bool
@@ -130,28 +143,15 @@ command_receiver_process_byte(
 /*
  * Forget sequence ordering history.
  *
- * This exists for the later command-watchdog/failsafe phase.
- *
- * Example:
- *
- *     FC was running at sequence 50000
- *     FC loses power
- *     motor node remains powered
- *     watchdog identifies a real communication-session break
- *     FC restarts sequence from 0
- *
- * The watchdog may then explicitly reset sequence history before
- * accepting commands from the new communication session.
- *
- * Phase 6.1 does NOT call this automatically because the UART
- * timeout policy has intentionally not been selected yet.
+ * The command watchdog calls this after a real communication-session
+ * break so a rebooted FC can restart its sequence from zero.
  */
 void
 command_receiver_reset_sequence_history(void);
 
 
 /*
- * Copy latest validated motor command.
+ * Copy latest validated motor command and requested state.
  */
 bool
 command_receiver_get_latest(
