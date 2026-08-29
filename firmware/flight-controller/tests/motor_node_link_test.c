@@ -9,10 +9,6 @@
 #include <stdio.h>
 
 
-/*
- * Host-test stubs for the STM32-specific USART2 transport.
- */
-
 static bool
     stub_tx_busy;
 
@@ -53,21 +49,13 @@ uart2_link_init(
     bool enable_tx,
     bool enable_rx)
 {
-    init_pclk1 =
-        pclk1_hz;
-
-    init_baud =
-        baud_rate;
-
-    init_tx =
-        enable_tx;
-
-    init_rx =
-        enable_rx;
+    init_pclk1 = pclk1_hz;
+    init_baud = baud_rate;
+    init_tx = enable_tx;
+    init_rx = enable_rx;
 
 
-    return
-        UART2_LINK_OK;
+    return UART2_LINK_OK;
 }
 
 
@@ -89,16 +77,14 @@ uart2_link_start_tx(
     }
 
 
-    captured_length =
-        length;
+    captured_length = length;
 
 
     for (i = 0UL;
          i < length;
          i++)
     {
-        captured_frame[i] =
-            data[i];
+        captured_frame[i] = data[i];
     }
 
 
@@ -109,8 +95,7 @@ uart2_link_start_tx(
 bool
 uart2_link_tx_busy(void)
 {
-    return
-        stub_tx_busy;
+    return stub_tx_busy;
 }
 
 
@@ -146,33 +131,18 @@ uart2_link_get_diag(
 static motor_mixer_output_t
 make_valid_output(void)
 {
-    motor_mixer_output_t
-        output;
+    motor_mixer_output_t output;
 
 
     output =
         (motor_mixer_output_t){0};
 
-
-    output.sequence =
-        77UL;
-
-
-    output.flags =
-        MOTOR_MIXER_VALID;
-
-
-    output.m1 =
-        0.844f;
-
-    output.m2 =
-        0.280f;
-
-    output.m3 =
-        0.154f;
-
-    output.m4 =
-        0.723f;
+    output.sequence = 77UL;
+    output.flags = MOTOR_MIXER_VALID;
+    output.m1 = 0.844f;
+    output.m2 = 0.280f;
+    output.m3 = 0.154f;
+    output.m4 = 0.723f;
 
 
     return output;
@@ -185,105 +155,28 @@ reset_stubs(void)
     uint32_t i;
 
 
-    stub_tx_busy =
-        false;
-
-    stub_start_tx_success =
-        true;
-
-
-    captured_length =
-        0UL;
-
-
-    init_pclk1 =
-        0UL;
-
-    init_baud =
-        0UL;
-
-    init_tx =
-        false;
-
-    init_rx =
-        false;
+    stub_tx_busy = false;
+    stub_start_tx_success = true;
+    captured_length = 0UL;
+    init_pclk1 = 0UL;
+    init_baud = 0UL;
+    init_tx = false;
+    init_rx = false;
 
 
     for (i = 0UL;
-         i <
-         UART2_LINK_TX_BUFFER_CAPACITY;
+         i < UART2_LINK_TX_BUFFER_CAPACITY;
          i++)
     {
-        captured_frame[i] =
-            0U;
+        captured_frame[i] = 0U;
     }
 }
 
 
-static void
-test_initialization(void)
+static motor_link_motor_command_t
+decode_captured(void)
 {
-    reset_stubs();
-
-
-    assert(
-        motor_node_link_init(
-            36000000UL,
-            230400UL) ==
-        MOTOR_NODE_LINK_OK);
-
-
-    assert(
-        motor_node_link_is_ready());
-
-
-    assert(
-        init_pclk1 ==
-        36000000UL);
-
-
-    assert(
-        init_baud ==
-        230400UL);
-
-
-    assert(
-        init_tx);
-
-
-    assert(
-        !init_rx);
-}
-
-
-static void
-test_valid_mixer_output_is_encoded(void)
-{
-    motor_mixer_output_t
-        output;
-
-    motor_link_motor_command_t
-        decoded;
-
-
-    reset_stubs();
-
-
-    assert(
-        motor_node_link_init(
-            36000000UL,
-            230400UL) ==
-        MOTOR_NODE_LINK_OK);
-
-
-    output =
-        make_valid_output();
-
-
-    assert(
-        motor_node_link_send(
-            &output) ==
-        MOTOR_NODE_LINK_OK);
+    motor_link_motor_command_t command;
 
 
     assert(
@@ -295,54 +188,169 @@ test_valid_mixer_output_is_encoded(void)
         motor_link_decode_motor_command(
             captured_frame,
             captured_length,
-            &decoded) ==
+            &command) ==
         MOTOR_LINK_PROTOCOL_OK);
 
 
-    assert(
-        decoded.sequence ==
-        77UL);
+    return command;
+}
+
+
+static void
+test_initialization_defaults_disarmed(void)
+{
+    reset_stubs();
 
 
     assert(
-        decoded.m1 ==
-        844U);
+        motor_node_link_init(
+            36000000UL,
+            230400UL) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    assert(motor_node_link_is_ready());
+    assert(init_pclk1 == 36000000UL);
+    assert(init_baud == 230400UL);
+    assert(init_tx);
+    assert(!init_rx);
+
 
     assert(
-        decoded.m2 ==
-        280U);
+        motor_node_link_get_requested_state() ==
+        MOTOR_LINK_REQUEST_DISARMED);
+}
+
+
+static void
+test_disarmed_forces_zero(void)
+{
+    motor_mixer_output_t output;
+    motor_link_motor_command_t command;
+
+
+    reset_stubs();
 
     assert(
-        decoded.m3 ==
-        154U);
+        motor_node_link_init(
+            36000000UL,
+            230400UL) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    output = make_valid_output();
+
 
     assert(
-        decoded.m4 ==
-        723U);
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    command = decode_captured();
+
+
+    assert(command.sequence == 77UL);
+    assert(command.requested_state == MOTOR_LINK_REQUEST_DISARMED);
+    assert(command.m1 == 0U);
+    assert(command.m2 == 0U);
+    assert(command.m3 == 0U);
+    assert(command.m4 == 0U);
 
 
     assert(
         g_motor_node_link_diag
-            .sent_frame_count ==
+            .disarmed_zero_frame_count ==
         1UL);
+}
+
+
+static void
+test_arm_guard_then_releases_mixer(void)
+{
+    motor_mixer_output_t output;
+    motor_link_motor_command_t command;
+    uint32_t i;
+
+
+    reset_stubs();
+
+    assert(
+        motor_node_link_init(
+            36000000UL,
+            230400UL) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    assert(
+        motor_node_link_set_requested_state(
+            MOTOR_LINK_REQUEST_ARMED) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    output = make_valid_output();
+
+
+    for (i = 0UL;
+         i <
+         (uint32_t)
+         MOTOR_NODE_LINK_ARM_GUARD_FRAMES;
+         i++)
+    {
+        output.sequence =
+            100UL + i;
+
+
+        assert(
+            motor_node_link_send(
+                &output) ==
+            MOTOR_NODE_LINK_OK);
+
+
+        command = decode_captured();
+
+
+        assert(command.requested_state == MOTOR_LINK_REQUEST_ARMED);
+        assert(command.m1 == 0U);
+        assert(command.m2 == 0U);
+        assert(command.m3 == 0U);
+        assert(command.m4 == 0U);
+    }
 
 
     assert(
         g_motor_node_link_diag
-            .last_sent_sequence ==
-        77UL);
+            .arm_guard_frames_remaining ==
+        0UL);
+
+
+    output.sequence++;
+
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    command = decode_captured();
+
+
+    assert(command.requested_state == MOTOR_LINK_REQUEST_ARMED);
+    assert(command.m1 == 844U);
+    assert(command.m2 == 280U);
+    assert(command.m3 == 154U);
+    assert(command.m4 == 723U);
 }
 
 
 static void
-test_invalid_mixer_output_is_rejected(void)
+test_busy_does_not_consume_arm_guard(void)
 {
-    motor_mixer_output_t
-        output;
+    motor_mixer_output_t output;
 
 
     reset_stubs();
-
 
     assert(
         motor_node_link_init(
@@ -351,68 +359,15 @@ test_invalid_mixer_output_is_rejected(void)
         MOTOR_NODE_LINK_OK);
 
 
-    output =
-        make_valid_output();
-
-
-    output.flags =
-        0UL;
-
-
     assert(
-        motor_node_link_send(
-            &output) ==
-        MOTOR_NODE_LINK_MIXER_INVALID);
-
-
-    assert(
-        captured_length ==
-        0UL);
-
-
-    output =
-        make_valid_output();
-
-
-    output.m4 =
-        1.1f;
-
-
-    assert(
-        motor_node_link_send(
-            &output) ==
-        MOTOR_NODE_LINK_COMMAND_INVALID);
-
-
-    assert(
-        captured_length ==
-        0UL);
-}
-
-
-static void
-test_busy_transfer_drops_fresh_command_without_blocking(void)
-{
-    motor_mixer_output_t
-        output;
-
-
-    reset_stubs();
-
-
-    assert(
-        motor_node_link_init(
-            36000000UL,
-            230400UL) ==
+        motor_node_link_set_requested_state(
+            MOTOR_LINK_REQUEST_ARMED) ==
         MOTOR_NODE_LINK_OK);
 
 
-    output =
-        make_valid_output();
+    output = make_valid_output();
 
-
-    stub_tx_busy =
-        true;
+    stub_tx_busy = true;
 
 
     assert(
@@ -423,25 +378,20 @@ test_busy_transfer_drops_fresh_command_without_blocking(void)
 
     assert(
         g_motor_node_link_diag
-            .tx_busy_drop_count ==
-        1UL);
-
-
-    assert(
-        captured_length ==
-        0UL);
+            .arm_guard_frames_remaining ==
+        (uint32_t)
+        MOTOR_NODE_LINK_ARM_GUARD_FRAMES);
 }
 
 
 static void
-test_uart_start_failure_is_reported(void)
+test_disarm_cancels_guard(void)
 {
-    motor_mixer_output_t
-        output;
+    motor_mixer_output_t output;
+    motor_link_motor_command_t command;
 
 
     reset_stubs();
-
 
     assert(
         motor_node_link_init(
@@ -450,12 +400,110 @@ test_uart_start_failure_is_reported(void)
         MOTOR_NODE_LINK_OK);
 
 
-    output =
-        make_valid_output();
+    assert(
+        motor_node_link_set_requested_state(
+            MOTOR_LINK_REQUEST_ARMED) ==
+        MOTOR_NODE_LINK_OK);
 
 
-    stub_start_tx_success =
-        false;
+    output = make_valid_output();
+
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    assert(
+        motor_node_link_set_requested_state(
+            MOTOR_LINK_REQUEST_DISARMED) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    assert(
+        g_motor_node_link_diag
+            .arm_guard_frames_remaining ==
+        0UL);
+
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    command = decode_captured();
+
+
+    assert(command.requested_state == MOTOR_LINK_REQUEST_DISARMED);
+    assert(command.m1 == 0U);
+    assert(command.m4 == 0U);
+}
+
+
+static void
+test_invalid_state_and_mixer_are_rejected(void)
+{
+    motor_mixer_output_t output;
+
+
+    reset_stubs();
+
+    assert(
+        motor_node_link_init(
+            36000000UL,
+            230400UL) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    assert(
+        motor_node_link_set_requested_state(
+            (motor_link_requested_state_t)2) ==
+        MOTOR_NODE_LINK_STATE_INVALID);
+
+
+    output = make_valid_output();
+
+    output.flags = 0UL;
+
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_MIXER_INVALID);
+
+
+    output = make_valid_output();
+
+    output.m4 = 1.1f;
+
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_COMMAND_INVALID);
+}
+
+
+static void
+test_uart_start_failure_is_reported(void)
+{
+    motor_mixer_output_t output;
+
+
+    reset_stubs();
+
+    assert(
+        motor_node_link_init(
+            36000000UL,
+            230400UL) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    output = make_valid_output();
+
+    stub_start_tx_success = false;
 
 
     assert(
@@ -474,14 +522,12 @@ test_uart_start_failure_is_reported(void)
 int
 main(void)
 {
-    test_initialization();
-
-    test_valid_mixer_output_is_encoded();
-
-    test_invalid_mixer_output_is_rejected();
-
-    test_busy_transfer_drops_fresh_command_without_blocking();
-
+    test_initialization_defaults_disarmed();
+    test_disarmed_forces_zero();
+    test_arm_guard_then_releases_mixer();
+    test_busy_does_not_consume_arm_guard();
+    test_disarm_cancels_guard();
+    test_invalid_state_and_mixer_are_rejected();
     test_uart_start_failure_is_reported();
 
 
