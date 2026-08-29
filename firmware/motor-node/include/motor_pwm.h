@@ -17,11 +17,18 @@
  *     M3 -> TIM3_CH3 -> PB0
  *     M4 -> TIM3_CH4 -> PB1
  *
- * The initial bench configuration uses a 1 MHz timer counter so
- * one timer count equals one microsecond. The initial SimonK bench
- * range is 1000..2000 us at 400 Hz. Those electrical limits remain
- * configurable because the final ESC range must be verified on the
- * real hardware before flight use.
+ * The initial bench configuration uses a 1 MHz timer counter so one
+ * timer count equals one microsecond. The initial SimonK bench range
+ * is 1000..2000 us at 400 Hz. Those numerical values remain bench
+ * configuration only until the installed ESCs are physically verified.
+ *
+ * Phase 6.3 deliberately defines protocol command 0 as the same
+ * electrical pulse used by DISARMED/FAILSAFE. Therefore
+ * MOTOR_ESC_SAFE_US and MOTOR_ESC_MIN_US are required to be equal.
+ * A future measured "minimum reliably spinning motor" threshold is a
+ * different concept and must not be implemented by raising this
+ * electrical minimum, because doing that would make the zero-command
+ * ARM guard spin the motors.
  */
 
 #ifndef MOTOR_PWM_ENABLE
@@ -70,9 +77,8 @@
 #error "Invalid MOTOR_ESC_MIN_US / MOTOR_ESC_MAX_US range"
 #endif
 
-#if (MOTOR_ESC_SAFE_US < 1UL) || \
-    (MOTOR_ESC_SAFE_US > MOTOR_ESC_MAX_US)
-#error "MOTOR_ESC_SAFE_US must be within the physical PWM range"
+#if (MOTOR_ESC_SAFE_US != MOTOR_ESC_MIN_US)
+#error "Phase 6.3 requires MOTOR_ESC_SAFE_US == MOTOR_ESC_MIN_US"
 #endif
 
 #if (MOTOR_ESC_MAX_US >= MOTOR_PWM_PERIOD_US)
@@ -121,15 +127,15 @@
 
 #if MOTOR_PWM_TEST_MODE
 
-#if (MOTOR_PWM_TEST_M1_US < 1UL) || \
+#if (MOTOR_PWM_TEST_M1_US < MOTOR_ESC_MIN_US) || \
     (MOTOR_PWM_TEST_M1_US > MOTOR_ESC_MAX_US) || \
-    (MOTOR_PWM_TEST_M2_US < 1UL) || \
+    (MOTOR_PWM_TEST_M2_US < MOTOR_ESC_MIN_US) || \
     (MOTOR_PWM_TEST_M2_US > MOTOR_ESC_MAX_US) || \
-    (MOTOR_PWM_TEST_M3_US < 1UL) || \
+    (MOTOR_PWM_TEST_M3_US < MOTOR_ESC_MIN_US) || \
     (MOTOR_PWM_TEST_M3_US > MOTOR_ESC_MAX_US) || \
-    (MOTOR_PWM_TEST_M4_US < 1UL) || \
+    (MOTOR_PWM_TEST_M4_US < MOTOR_ESC_MIN_US) || \
     (MOTOR_PWM_TEST_M4_US > MOTOR_ESC_MAX_US)
-#error "Raw PWM test pulse must be inside the physical PWM range"
+#error "Raw PWM test pulse must be inside MOTOR_ESC_MIN_US..MOTOR_ESC_MAX_US"
 #endif
 
 #endif
@@ -168,7 +174,6 @@ typedef struct
 
     uint32_t verify_failure_count;
 
-
     uint32_t timer_clock_hz;
 
     uint32_t counter_clock_hz;
@@ -179,12 +184,10 @@ typedef struct
 
     uint32_t pwm_hz;
 
-
     uint16_t last_m1_us;
     uint16_t last_m2_us;
     uint16_t last_m3_us;
     uint16_t last_m4_us;
-
 
     uint32_t initialized;
 
@@ -198,19 +201,17 @@ typedef struct
 extern volatile motor_pwm_status_t
     g_motor_pwm_status;
 
-
 extern volatile motor_pwm_diag_t
     g_motor_pwm_diag;
 
 
 /*
- * STM32F1 timer clock rule:
+ * STM32F1 timer-clock rule from the RCC clock tree:
  *
  *     APB prescaler = 1  -> TIMxCLK = PCLKx
  *     APB prescaler > 1  -> TIMxCLK = 2 * PCLKx
  *
  * hclk_hz and pclk1_hz describe the already-configured clock tree.
- * Returns zero if the relationship is not valid.
  */
 uint32_t
 motor_pwm_timer_clock_from_apb1(
@@ -230,11 +231,6 @@ motor_pwm_calculate_timer_config(
     uint32_t *auto_reload_out);
 
 
-/*
- * True when a requested physical pulse is inside the configured
- * electrical range. MOTOR_ESC_SAFE_US is allowed even if it is lower
- * than the future active MOTOR_ESC_MIN_US value.
- */
 bool
 motor_pwm_pulse_is_valid(
     uint16_t pulse_us);
@@ -260,10 +256,10 @@ motor_pwm_init(
 
 
 /*
- * Write four preload values. Update events are temporarily disabled
- * during the four writes so a timer overflow cannot publish a partial
- * motor update. All channels become active together at a later update
- * event.
+ * Write four CCR preload values. Update events are temporarily
+ * disabled during the four writes so an overflow cannot publish a
+ * partial motor set. The complete set becomes active together at a
+ * later normal timer update event.
  */
 bool
 motor_pwm_set_us(
@@ -273,9 +269,6 @@ motor_pwm_set_us(
     uint16_t m4_us);
 
 
-/*
- * Normal ESC-safe output while the PWM subsystem remains active.
- */
 bool
 motor_pwm_set_safe(void);
 
@@ -285,9 +278,6 @@ motor_pwm_set_safe(void);
  *
  *     stop TIM3 / disable channels
  *     return PA6, PA7, PB0, PB1 to verified GPIO LOW
- *
- * This is intentionally different from the normal DISARMED/FAILSAFE
- * ESC-safe PWM policy.
  */
 void
 motor_pwm_hard_disable(void);
@@ -297,9 +287,6 @@ bool
 motor_pwm_is_initialized(void);
 
 
-/*
- * Read back the key RCC/GPIO/TIM3 settings used by this driver.
- */
 bool
 motor_pwm_configuration_is_valid(void);
 
