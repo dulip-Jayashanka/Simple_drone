@@ -19,6 +19,40 @@
 #endif
 
 
+/*
+ * Temporary FC-side bench ARM source.
+ *
+ * Normal firmware keeps this disabled. When enabled, the link first
+ * transmits a controlled number of successful DISARMED zero-command
+ * frames, then requests ARMED exactly once through the same normal
+ * state-request path that the future pilot/LoRa layer will use.
+ *
+ * This deliberately does NOT bypass the motor-node state gate,
+ * watchdog, DISARM-seen interlock or ARM guard.
+ */
+#ifndef MOTOR_ARM_BENCH_TEST
+#define MOTOR_ARM_BENCH_TEST  0
+#endif
+
+
+#if (MOTOR_ARM_BENCH_TEST != 0) && \
+    (MOTOR_ARM_BENCH_TEST != 1)
+#error "MOTOR_ARM_BENCH_TEST must be 0 or 1"
+#endif
+
+
+#ifndef MOTOR_ARM_BENCH_DISARMED_FRAMES
+#define MOTOR_ARM_BENCH_DISARMED_FRAMES  500UL
+#endif
+
+
+#if MOTOR_ARM_BENCH_TEST && \
+    ((MOTOR_ARM_BENCH_DISARMED_FRAMES < 1) || \
+     (MOTOR_ARM_BENCH_DISARMED_FRAMES > 100000))
+#error "MOTOR_ARM_BENCH_DISARMED_FRAMES must be from 1 to 100000"
+#endif
+
+
 typedef enum
 {
     MOTOR_NODE_LINK_OK = 0,
@@ -70,6 +104,13 @@ typedef struct
     uint32_t disarmed_zero_frame_count;
 
     uint32_t arm_guard_zero_frame_count;
+
+
+    uint32_t bench_arm_request_count;
+
+    uint32_t bench_arm_request_issued;
+
+    uint32_t bench_arm_trigger_disarmed_frame_count;
 
 
     uint32_t last_attempted_sequence;
@@ -144,11 +185,16 @@ motor_node_link_get_requested_state(void);
  * values. During the ARM guard, ARMED also transmits zeros. Actual
  * mixer values are released only after that guard completes.
  *
+ * When MOTOR_ARM_BENCH_TEST=1, the link automatically issues one
+ * normal ARMED request only after MOTOR_ARM_BENCH_DISARMED_FRAMES
+ * successful DISARMED frames have been transmitted. An explicit
+ * later DISARM never causes the bench mode to auto-arm a second time.
+ *
  * There is deliberately no backlog of old motor commands.
  *
  * If the previous frame has not finished, the current frame is
  * dropped and the next fresh mixer update gets another opportunity.
- * Dropped frames do not consume ARM-guard progress.
+ * Dropped frames do not consume ARM-guard or bench-delay progress.
  */
 motor_node_link_status_t
 motor_node_link_send(
