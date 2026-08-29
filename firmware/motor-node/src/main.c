@@ -2,71 +2,32 @@
 #define MOTOR_NODE_LINK_ENABLE 0
 #endif
 
-#if (MOTOR_NODE_LINK_ENABLE != 0) && \
-    (MOTOR_NODE_LINK_ENABLE != 1)
-#error "MOTOR_NODE_LINK_ENABLE must be 0 or 1"
-#endif
-
-
 #ifndef MOTOR_NODE_LINK_UART_DEBUG
 #define MOTOR_NODE_LINK_UART_DEBUG 0
 #endif
-
-#if (MOTOR_NODE_LINK_UART_DEBUG != 0) && \
-    (MOTOR_NODE_LINK_UART_DEBUG != 1)
-#error "MOTOR_NODE_LINK_UART_DEBUG must be 0 or 1"
-#endif
-
 
 #ifndef MOTOR_NODE_LINK_UART_RATE_HZ
 #define MOTOR_NODE_LINK_UART_RATE_HZ 10
 #endif
 
-
-/*
- * ============================================================
- * PHASE 6.2 COMMAND WATCHDOG
- * ============================================================
- */
-
 #ifndef MOTOR_COMMAND_WATCHDOG_ENABLE
 #define MOTOR_COMMAND_WATCHDOG_ENABLE 0
 #endif
-
-#if (MOTOR_COMMAND_WATCHDOG_ENABLE != 0) && \
-    (MOTOR_COMMAND_WATCHDOG_ENABLE != 1)
-#error "MOTOR_COMMAND_WATCHDOG_ENABLE must be 0 or 1"
-#endif
-
 
 #ifndef MOTOR_COMMAND_TIMEOUT_MS
 #define MOTOR_COMMAND_TIMEOUT_MS 20UL
 #endif
 
-
-#if MOTOR_NODE_LINK_UART_DEBUG && \
-    !MOTOR_NODE_LINK_ENABLE
-#error "MOTOR_NODE_LINK_UART_DEBUG requires MOTOR_NODE_LINK_ENABLE=1"
+#ifndef MOTOR_PWM_ENABLE
+#define MOTOR_PWM_ENABLE 0
 #endif
 
-
-#if MOTOR_COMMAND_WATCHDOG_ENABLE && \
-    !MOTOR_NODE_LINK_ENABLE
-#error "MOTOR_COMMAND_WATCHDOG_ENABLE requires MOTOR_NODE_LINK_ENABLE=1"
+#ifndef MOTOR_PWM_TEST_MODE
+#define MOTOR_PWM_TEST_MODE 0
 #endif
 
-
-#if MOTOR_NODE_LINK_UART_DEBUG && \
-    ((MOTOR_NODE_LINK_UART_RATE_HZ < 1) || \
-     (MOTOR_NODE_LINK_UART_RATE_HZ > 100))
-#error "MOTOR_NODE_LINK_UART_RATE_HZ must be from 1 to 100"
-#endif
-
-
-#if MOTOR_COMMAND_WATCHDOG_ENABLE && \
-    ((MOTOR_COMMAND_TIMEOUT_MS < 1) || \
-     (MOTOR_COMMAND_TIMEOUT_MS > 1000))
-#error "MOTOR_COMMAND_TIMEOUT_MS must be from 1 to 1000"
+#ifndef MOTOR_ACTUATOR_TEST_MODE
+#define MOTOR_ACTUATOR_TEST_MODE 0
 #endif
 
 
@@ -79,18 +40,34 @@
 #endif
 
 
-#if MOTOR_NODE_LINK_ENABLE
+#if MOTOR_PWM_ENABLE && \
+    (MOTOR_PWM_TEST_MODE || \
+     MOTOR_ACTUATOR_TEST_MODE)
 
-#include "command_receiver.h"
-#include "uart2_link.h"
+#define MOTOR_PHASE63_ISOLATED_TEST 1
+
+#else
+
+#define MOTOR_PHASE63_ISOLATED_TEST 0
 
 #endif
 
 
+#if MOTOR_NODE_LINK_ENABLE
+#include "command_receiver.h"
+#include "uart2_link.h"
+#endif
+
+
 #if MOTOR_COMMAND_WATCHDOG_ENABLE
-
 #include "command_watchdog.h"
+#include "motor_command_gate.h"
+#endif
 
+
+#if MOTOR_PWM_ENABLE
+#include "motor_actuator.h"
+#include "motor_pwm.h"
 #endif
 
 
@@ -107,77 +84,63 @@
 #include <stdint.h>
 
 
-#define STATUS_LED_TOGGLE_INTERVAL_MS \
-    500UL
-
-
-#define UART_DIAG_BAUD_RATE \
-    115200UL
+#define STATUS_LED_TOGGLE_INTERVAL_MS 500UL
+#define UART_DIAG_BAUD_RATE           115200UL
 
 
 #if MOTOR_NODE_LINK_ENABLE
-
 #ifndef MOTOR_NODE_LINK_BAUD
-
-#define MOTOR_NODE_LINK_BAUD \
-    230400UL
-
+#define MOTOR_NODE_LINK_BAUD          230400UL
 #endif
-
 #endif
 
 
 /*
  * ============================================================
- * EXISTING CLOCK / PLATFORM DIAGNOSTICS
+ * DEBUGGER-VISIBLE PLATFORM STATE
  * ============================================================
  */
 
 volatile system_clock_status_t
     g_clock_status;
 
-
 volatile uint32_t
     g_sysclk_hz;
-
 
 volatile uint32_t
     g_hclk_hz;
 
-
 volatile uint32_t
     g_pclk1_hz;
-
 
 volatile uint32_t
     g_pclk2_hz;
 
-
 volatile uint32_t
     g_adcclk_hz;
-
 
 volatile uint32_t
     g_main_loop_reached;
 
-
 volatile system_time_status_t
     g_system_time_status;
 
-
 volatile uart_diag_status_t
     g_uart_diag_status;
-
 
 volatile uint32_t
     g_uart_diag_output_ok;
 
 
 #if MOTOR_NODE_LINK_ENABLE
-
 volatile uart2_link_status_t
     g_motor_command_uart_status;
+#endif
 
+
+#if MOTOR_PWM_ENABLE
+volatile uint32_t
+    g_motor_pwm_timer_clock_hz;
 #endif
 
 
@@ -209,28 +172,19 @@ uart_diag_write_value_line(
         uart_diag_write_string(
             label));
 
-
     uart_diag_record_result(
         uart_diag_write_uint32(
             value));
 
-
     uart_diag_record_result(
         uart_diag_write_string(
             unit));
-
 
     uart_diag_record_result(
         uart_diag_write_string(
             "\r\n"));
 }
 
-
-/*
- * ============================================================
- * RECEIVED MOTOR-COMMAND UART DEBUG
- * ============================================================
- */
 
 #if MOTOR_NODE_LINK_UART_DEBUG
 
@@ -249,61 +203,55 @@ motor_node_link_uart_write_received(
         uart_diag_write_string(
             "[MOTOR RX] seq="));
 
-
     uart_diag_record_result(
         uart_diag_write_uint32(
             output->sequence));
-
 
     uart_diag_record_result(
         uart_diag_write_string(
             " M="));
 
-
     uart_diag_record_result(
         uart_diag_write_uint32(
             (uint32_t)output->m1));
 
-
     uart_diag_record_result(
-        uart_diag_write_char(
-            ','));
-
+        uart_diag_write_char(','));
 
     uart_diag_record_result(
         uart_diag_write_uint32(
             (uint32_t)output->m2));
 
-
     uart_diag_record_result(
-        uart_diag_write_char(
-            ','));
-
+        uart_diag_write_char(','));
 
     uart_diag_record_result(
         uart_diag_write_uint32(
             (uint32_t)output->m3));
 
-
     uart_diag_record_result(
-        uart_diag_write_char(
-            ','));
-
+        uart_diag_write_char(','));
 
     uart_diag_record_result(
         uart_diag_write_uint32(
             (uint32_t)output->m4));
 
+    uart_diag_record_result(
+        uart_diag_write_string(
+            " req="));
+
+    uart_diag_record_result(
+        uart_diag_write_uint32(
+            (uint32_t)
+            output->requested_state));
 
     uart_diag_record_result(
         uart_diag_write_string(
             " rx_ms="));
 
-
     uart_diag_record_result(
         uart_diag_write_uint32(
             output->received_timestamp_ms));
-
 
     uart_diag_record_result(
         uart_diag_write_string(
@@ -317,6 +265,10 @@ motor_node_link_uart_write_received(
  * ============================================================
  * FATAL FAIL-CLOSED HELPER
  * ============================================================
+ *
+ * Normal Phase 6.3 DISARMED/FAILSAFE keeps valid ESC-safe PWM.
+ * This helper is deliberately stronger: PWM is disconnected and the
+ * existing PA6/PA7/PB0/PB1 GPIO-LOW policy is restored.
  */
 
 static __attribute__((noreturn))
@@ -324,7 +276,11 @@ void
 halt_with_safe_outputs(
     const char *message)
 {
+#if MOTOR_PWM_ENABLE
+    motor_pwm_hard_disable();
+#else
     motor_outputs_force_safe();
+#endif
 
 
     status_led_off();
@@ -347,6 +303,59 @@ halt_with_safe_outputs(
 }
 
 
+#if MOTOR_PWM_ENABLE && \
+    !MOTOR_PHASE63_ISOLATED_TEST
+
+static bool
+apply_current_runtime_output(
+    const command_receiver_output_t *command)
+{
+    bool
+        success;
+
+
+    if ((command !=
+         (const command_receiver_output_t *)0) &&
+        command->valid &&
+        motor_node_is_armed()
+#if MOTOR_COMMAND_WATCHDOG_ENABLE
+        && command_watchdog_is_healthy()
+#endif
+       )
+    {
+        success =
+            motor_actuator_apply(
+                command->m1,
+                command->m2,
+                command->m3,
+                command->m4);
+    }
+    else
+    {
+        success =
+            motor_actuator_set_safe();
+    }
+
+
+    if (success)
+    {
+        return true;
+    }
+
+
+    /*
+     * A failed actuator write/configuration is itself a local output
+     * failure. Latch FAILSAFE and ask that state to establish safe
+     * output. If even that fails, the caller will hard-stop.
+     */
+    return
+        motor_node_state_enter_failsafe(
+            MOTOR_NODE_FAILSAFE_OUTPUT_FAILURE);
+}
+
+#endif
+
+
 /*
  * ============================================================
  * MAIN
@@ -359,7 +368,6 @@ main(void)
     uint32_t
         previous_heartbeat_ms;
 
-
     uint32_t
         current_time_ms;
 
@@ -369,7 +377,6 @@ main(void)
 
     uint32_t
         accepted_command_count;
-
 
     command_receiver_output_t
         received_command;
@@ -382,7 +389,6 @@ main(void)
     uint32_t
         motor_node_link_previous_uart_ms;
 
-
     bool
         motor_node_link_uart_timestamp_valid;
 
@@ -394,7 +400,6 @@ main(void)
     command_watchdog_status_t
         previous_watchdog_status;
 
-
     command_watchdog_status_t
         watchdog_status;
 
@@ -403,12 +408,11 @@ main(void)
 
     /*
      * ========================================================
-     * EARLIEST MOTOR-SAFE STATE
+     * EARLIEST HARD-SAFE STATE
      * ========================================================
      */
 
     motor_outputs_force_safe();
-
 
     fault_record_clear();
 
@@ -435,22 +439,17 @@ main(void)
     g_clock_status =
         system_clock_init();
 
-
     g_sysclk_hz =
         system_clock_get_sysclk_hz();
-
 
     g_hclk_hz =
         system_clock_get_hclk_hz();
 
-
     g_pclk1_hz =
         system_clock_get_pclk1_hz();
 
-
     g_pclk2_hz =
         system_clock_get_pclk2_hz();
-
 
     g_adcclk_hz =
         system_clock_get_adcclk_hz();
@@ -460,7 +459,6 @@ main(void)
         SYSTEM_CLOCK_OK)
     {
         motor_outputs_force_safe();
-
 
         for (;;)
         {
@@ -481,7 +479,6 @@ main(void)
             g_pclk2_hz,
             UART_DIAG_BAUD_RATE);
 
-
     g_uart_diag_output_ok =
         (g_uart_diag_status ==
          UART_DIAG_OK) ?
@@ -496,29 +493,24 @@ main(void)
             uart_diag_write_line(
                 "[BOOT] Motor node starting"));
 
-
         uart_diag_record_result(
             uart_diag_write_line(
                 "[CLOCK] Initialization OK"));
-
 
         uart_diag_write_value_line(
             "[CLOCK] SYSCLK = ",
             g_sysclk_hz,
             " Hz");
 
-
         uart_diag_write_value_line(
             "[CLOCK] HCLK   = ",
             g_hclk_hz,
             " Hz");
 
-
         uart_diag_write_value_line(
             "[CLOCK] PCLK1  = ",
             g_pclk1_hz,
             " Hz");
-
 
         uart_diag_write_value_line(
             "[CLOCK] PCLK2  = ",
@@ -527,15 +519,9 @@ main(void)
     }
 
 
-    /*
-     * Existing controlled fault test.
-     */
     fault_test_run();
 
 
-    /*
-     * Reverify physical safe state after startup/fault-test path.
-     */
     g_motor_outputs_safe =
         motor_outputs_are_safe() ?
         1UL :
@@ -546,7 +532,7 @@ main(void)
         0UL)
     {
         halt_with_safe_outputs(
-            "[ERROR] Motor outputs are not safe");
+            "[ERROR] Motor outputs are not hard-safe after startup");
     }
 
 
@@ -555,7 +541,7 @@ main(void)
     {
         uart_diag_record_result(
             uart_diag_write_line(
-                "[SAFE] Motor outputs are LOW"));
+                "[SAFE] Startup motor outputs are GPIO LOW"));
     }
 
 
@@ -589,20 +575,128 @@ main(void)
 
     /*
      * ========================================================
-     * PHASE 6.2 MOTOR-NODE SAFETY STATE
+     * PHASE 6.3 PWM / ACTUATOR INITIALIZATION
+     * ========================================================
+     */
+
+#if MOTOR_PWM_ENABLE
+
+    g_motor_pwm_timer_clock_hz =
+        motor_pwm_timer_clock_from_apb1(
+            g_hclk_hz,
+            g_pclk1_hz);
+
+
+    if (g_motor_pwm_timer_clock_hz ==
+        0UL)
+    {
+        halt_with_safe_outputs(
+            "[ERROR] Invalid APB1/TIM3 clock relationship");
+    }
+
+
+    if (!motor_pwm_init(
+            g_motor_pwm_timer_clock_hz))
+    {
+        halt_with_safe_outputs(
+            "[ERROR] TIM3 motor PWM initialization failed");
+    }
+
+
+    if (g_uart_diag_status ==
+        UART_DIAG_OK)
+    {
+        uart_diag_write_value_line(
+            "[PWM] TIM3 clock = ",
+            g_motor_pwm_timer_clock_hz,
+            " Hz");
+
+        uart_diag_write_value_line(
+            "[PWM] ESC rate = ",
+            MOTOR_ESC_PWM_HZ,
+            " Hz");
+
+        uart_diag_write_value_line(
+            "[PWM] ESC safe = ",
+            MOTOR_ESC_SAFE_US,
+            " us");
+    }
+
+
+#if MOTOR_PWM_TEST_MODE
+
+    if (!motor_pwm_set_us(
+            (uint16_t)MOTOR_PWM_TEST_M1_US,
+            (uint16_t)MOTOR_PWM_TEST_M2_US,
+            (uint16_t)MOTOR_PWM_TEST_M3_US,
+            (uint16_t)MOTOR_PWM_TEST_M4_US))
+    {
+        halt_with_safe_outputs(
+            "[ERROR] Raw PWM bench-test value rejected");
+    }
+
+
+    if (g_uart_diag_status ==
+        UART_DIAG_OK)
+    {
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[PWM TEST] Isolated raw TIM3 output owner active"));
+    }
+
+
+#elif MOTOR_ACTUATOR_TEST_MODE
+
+    if (!motor_actuator_init())
+    {
+        halt_with_safe_outputs(
+            "[ERROR] Motor actuator initialization failed");
+    }
+
+
+    if (!motor_actuator_apply(
+            (uint16_t)MOTOR_ACTUATOR_TEST_M1,
+            (uint16_t)MOTOR_ACTUATOR_TEST_M2,
+            (uint16_t)MOTOR_ACTUATOR_TEST_M3,
+            (uint16_t)MOTOR_ACTUATOR_TEST_M4))
+    {
+        halt_with_safe_outputs(
+            "[ERROR] Motor actuator bench-test command rejected");
+    }
+
+
+    if (g_uart_diag_status ==
+        UART_DIAG_OK)
+    {
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[ACTUATOR TEST] Isolated command-to-PWM owner active"));
+    }
+
+
+#else
+
+    if (!motor_actuator_init())
+    {
+        halt_with_safe_outputs(
+            "[ERROR] Motor actuator initialization failed");
+    }
+
+#endif
+
+#endif /* MOTOR_PWM_ENABLE */
+
+
+    /*
+     * ========================================================
+     * NORMAL STATE / COMMUNICATION OWNERSHIP
      * ========================================================
      *
-     * Starts in DISARMED.
-     *
-     * DISARMED remains enum value zero.
-     *
-     * Phase 6.2 adds:
-     *
-     *     ARMED
-     *     FAILSAFE
-     *
-     * but PWM is still not implemented.
+     * Raw PWM and actuator test modes intentionally stop before this
+     * section so no second subsystem can fight the test owner for CCRx.
      */
+
+#if !MOTOR_PHASE63_ISOLATED_TEST
 
     if (!motor_node_state_init())
     {
@@ -614,29 +708,23 @@ main(void)
     if (g_uart_diag_status ==
         UART_DIAG_OK)
     {
+#if MOTOR_PWM_ENABLE
         uart_diag_record_result(
             uart_diag_write_line(
-                "[STATE] Entered DISARMED"));
+                "[STATE] Entered DISARMED with ESC-safe PWM"));
+#else
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[STATE] Entered DISARMED with GPIO LOW"));
+#endif
     }
 
-
-    /*
-     * ========================================================
-     * FMCOM MOTOR COMMAND LINK
-     * ========================================================
-     */
 
 #if MOTOR_NODE_LINK_ENABLE
 
     command_receiver_init();
 
 
-    /*
-     * Motor-node communication direction:
-     *
-     *     USART2 TX = disabled
-     *     USART2 RX = enabled
-     */
     g_motor_command_uart_status =
         uart2_link_init(
             g_pclk1_hz,
@@ -653,12 +741,6 @@ main(void)
     }
 
 
-    /*
-     * ========================================================
-     * PHASE 6.2 COMMAND WATCHDOG INITIALIZATION
-     * ========================================================
-     */
-
 #if MOTOR_COMMAND_WATCHDOG_ENABLE
 
     if (!command_watchdog_init(
@@ -668,6 +750,13 @@ main(void)
             "[ERROR] Command watchdog initialization failed");
     }
 
+
+    if (!motor_command_gate_init())
+    {
+        halt_with_safe_outputs(
+            "[ERROR] Motor command state gate initialization failed");
+    }
+
 #endif
 
 
@@ -675,7 +764,6 @@ main(void)
 
     motor_node_link_previous_uart_ms =
         0UL;
-
 
     motor_node_link_uart_timestamp_valid =
         false;
@@ -691,38 +779,38 @@ main(void)
             MOTOR_NODE_LINK_BAUD,
             " baud");
 
-
+#if MOTOR_PWM_ENABLE
         uart_diag_record_result(
             uart_diag_write_line(
-                "[LINK] Receive/validate only; PWM remains disabled"));
-
+                "[LINK] Valid ARMED commands drive TIM3 PWM"));
+#else
+        uart_diag_record_result(
+            uart_diag_write_line(
+                "[LINK] Receive/validate only; PWM disabled"));
+#endif
 
 #if MOTOR_NODE_LINK_UART_DEBUG
-
         uart_diag_write_value_line(
             "[MOTOR RX] USART1 debug rate = ",
             MOTOR_NODE_LINK_UART_RATE_HZ,
             " Hz");
-
 #endif
 
-
 #if MOTOR_COMMAND_WATCHDOG_ENABLE
-
         uart_diag_write_value_line(
             "[WATCHDOG] Valid-command timeout = ",
             MOTOR_COMMAND_TIMEOUT_MS,
             " ms");
 
-
         uart_diag_record_result(
             uart_diag_write_line(
                 "[WATCHDOG] WAITING until first accepted fresh command"));
-
 #endif
     }
 
-#endif
+#endif /* MOTOR_NODE_LINK_ENABLE */
+
+#endif /* !MOTOR_PHASE63_ISOLATED_TEST */
 
 
     /*
@@ -751,57 +839,33 @@ main(void)
     }
 
 
-    /*
-     * ========================================================
-     * MAIN LOOP
-     * ========================================================
-     */
-
     for (;;)
     {
-        /*
-         * ----------------------------------------------------
-         * 1. LOCAL MOTOR SAFETY STATE FIRST
-         * ----------------------------------------------------
-         *
-         * Phase 6.2:
-         *
-         *     DISARMED  -> safe LOW
-         *     ARMED     -> safe LOW
-         *     FAILSAFE  -> safe LOW
-         *
-         * ARMED becomes a real PWM-driving state only later.
-         */
-        if (!motor_node_state_process())
-        {
-            halt_with_safe_outputs(
-                "[ERROR] Motor-node state safety enforcement failed");
-        }
-
-
         current_time_ms =
             millis();
 
 
+#if !MOTOR_PHASE63_ISOLATED_TEST
+
         /*
          * ----------------------------------------------------
-         * 2. COMMAND WATCHDOG
+         * 1. ENFORCE / VERIFY CURRENT LOCAL STATE FIRST
+         * ----------------------------------------------------
+         */
+        if (!motor_node_state_process())
+        {
+            halt_with_safe_outputs(
+                "[ERROR] Motor-node state output enforcement failed");
+        }
+
+
+        /*
+         * ----------------------------------------------------
+         * 2. WATCHDOG PREVIOUS COMMAND AGE BEFORE NEW RX
          * ----------------------------------------------------
          *
-         * IMPORTANT ORDERING:
-         *
-         * Check the age of the PREVIOUS accepted command before
-         * processing newly arrived UART bytes.
-         *
-         * Example:
-         *
-         *     last valid command       = 1000 ms
-         *     timeout                  = 20 ms
-         *     current loop             = 1025 ms
-         *     a new UART frame exists
-         *
-         * We must still recognize that a real 25 ms communication
-         * break occurred.
+         * This preserves genuine communication gaps even if a new
+         * frame is already waiting in the UART software buffer.
          */
 
 #if MOTOR_COMMAND_WATCHDOG_ENABLE
@@ -815,32 +879,14 @@ main(void)
                 current_time_ms);
 
 
-        /*
-         * Only act once when entering TIMED_OUT.
-         */
         if ((watchdog_status ==
              COMMAND_WATCHDOG_TIMED_OUT) &&
             (previous_watchdog_status !=
              COMMAND_WATCHDOG_TIMED_OUT))
         {
-            /*
-             * A watchdog timeout proves that the previous command
-             * communication session has been broken.
-             *
-             * Forget the old sequence baseline now.
-             *
-             * This allows:
-             *
-             *     old FC sequence = 50000
-             *     FC loses power
-             *     watchdog timeout
-             *     FC reboots
-             *     new FC sequence = 0
-             *
-             * without permanently rejecting the restarted FC as
-             * stale.
-             */
             command_receiver_reset_sequence_history();
+
+            motor_command_gate_reset_session();
 
 
             if (g_uart_diag_status ==
@@ -848,23 +894,17 @@ main(void)
             {
                 uart_diag_record_result(
                     uart_diag_write_line(
-                        "[WATCHDOG] Command timeout; sequence history reset"));
+                        "[WATCHDOG] Timeout; command session reset"));
             }
 
 
-            /*
-             * Communication timeout becomes a FAILSAFE condition
-             * only when the motor node was logically ARMED.
-             *
-             * DISARMED remains DISARMED.
-             */
             if (motor_node_is_armed())
             {
                 if (!motor_node_state_enter_failsafe(
                         MOTOR_NODE_FAILSAFE_COMMAND_TIMEOUT))
                 {
                     halt_with_safe_outputs(
-                        "[ERROR] FAILSAFE could not verify safe outputs");
+                        "[ERROR] FAILSAFE could not establish safe output");
                 }
 
 
@@ -883,12 +923,11 @@ main(void)
 
         /*
          * ----------------------------------------------------
-         * 3. USART2 COMMAND RX / VALIDATION
+         * 3. USART2 FRAME VALIDATION / PUBLICATION
          * ----------------------------------------------------
          */
 
 #if MOTOR_NODE_LINK_ENABLE
-
 
 #if MOTOR_NODE_LINK_UART_DEBUG || \
     MOTOR_COMMAND_WATCHDOG_ENABLE
@@ -898,11 +937,6 @@ main(void)
                 current_time_ms);
 
 
-        /*
-         * command_receiver_get_latest() is reached only when at
-         * least one complete command was accepted during this
-         * process call.
-         */
         if ((accepted_command_count !=
              0UL) &&
             command_receiver_get_latest(
@@ -912,41 +946,50 @@ main(void)
 #if MOTOR_COMMAND_WATCHDOG_ENABLE
 
             /*
-             * This is the ONLY watchdog refresh path.
-             *
-             * Because command_receiver has already accepted this
-             * command, it has already passed:
-             *
-             *     sync
-             *     version
-             *     type
-             *     length
-             *     CRC
-             *     M1..M4 range
-             *     sequence freshness
-             *
-             * Therefore:
-             *
-             * bad CRC             -> NO refresh
-             * duplicate sequence  -> NO refresh
-             * stale sequence      -> NO refresh
-             * random bytes        -> NO refresh
+             * The watchdog is refreshed only after the frame has
+             * passed sync/version/type/length/CRC/range/state/sequence
+             * validation in command_receiver.
              */
-            (void)command_watchdog_note_valid_command(
-                received_command.sequence,
-                received_command.received_timestamp_ms);
+            if (!command_watchdog_note_valid_command(
+                    received_command.sequence,
+                    received_command.received_timestamp_ms))
+            {
+                halt_with_safe_outputs(
+                    "[ERROR] Valid command could not refresh watchdog");
+            }
+
+
+            /*
+             * Only after watchdog refresh does the requested state
+             * gate evaluate DISARM/ARM. This keeps command freshness
+             * and the local state decision in an explicit order.
+             */
+            (void)motor_command_gate_apply(
+                &received_command,
+                command_watchdog_is_healthy());
+
+#endif
+
+
+#if MOTOR_PWM_ENABLE
+
+            /*
+             * Actual M1..M4 may reach PWM only if the local motor-node
+             * state is ARMED and the command watchdog is currently
+             * healthy. Every other state writes the ESC-safe pulse.
+             */
+            if (!apply_current_runtime_output(
+                    &received_command))
+            {
+                halt_with_safe_outputs(
+                    "[ERROR] Motor actuator output failure");
+            }
 
 #endif
 
 
 #if MOTOR_NODE_LINK_UART_DEBUG
 
-            /*
-             * Existing received-command USART1 observer.
-             *
-             * It remains diagnostic only and does not participate
-             * in safety/watchdog decisions.
-             */
             if ((g_uart_diag_status ==
                  UART_DIAG_OK) &&
                 ((!motor_node_link_uart_timestamp_valid) ||
@@ -958,10 +1001,8 @@ main(void)
                 motor_node_link_uart_write_received(
                     &received_command);
 
-
                 motor_node_link_previous_uart_ms =
                     current_time_ms;
-
 
                 motor_node_link_uart_timestamp_valid =
                     true;
@@ -970,28 +1011,23 @@ main(void)
 #endif
         }
 
-
 #else
 
-        /*
-         * Original Phase 6.1 path when neither watchdog nor UART
-         * receive debug needs to inspect accepted_count.
-         */
         (void)command_receiver_process(
             current_time_ms);
 
 #endif
 
+#endif /* MOTOR_NODE_LINK_ENABLE */
 
-#endif
+#endif /* !MOTOR_PHASE63_ISOLATED_TEST */
 
 
         /*
          * ----------------------------------------------------
-         * 4. EXISTING LED HEARTBEAT
+         * LED HEARTBEAT — ACTIVE IN NORMAL AND ISOLATED TEST MODE
          * ----------------------------------------------------
          */
-
         if ((uint32_t)(
                 current_time_ms -
                 previous_heartbeat_ms) >=
@@ -1000,39 +1036,9 @@ main(void)
             previous_heartbeat_ms =
                 current_time_ms;
 
-
             status_led_toggle();
         }
 
-
-        /*
-         * ====================================================
-         * PHASE 6.2 IMPORTANT LIMIT
-         * ====================================================
-         *
-         * There is intentionally NO automatic arm operation here.
-         *
-         * Ordinary M1..M4 MOTOR_COMMAND frames are not an ARM
-         * command.
-         *
-         * motor_node_state_request_arm() is now available, but
-         * nothing in this phase calls it from the wire protocol.
-         *
-         * Therefore actual hardware operation remains:
-         *
-         *     DISARMED
-         *     motor pins LOW
-         *
-         * unless a future explicit arm-control layer requests the
-         * logical transition.
-         *
-         * Future phases:
-         *
-         *     explicit ARM/DISARM protocol integration
-         *     motor output limits
-         *     TIM3 PWM
-         *     ESC mapping
-         */
 
         __asm volatile (
             "nop");
