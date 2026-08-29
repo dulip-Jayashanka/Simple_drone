@@ -3,14 +3,6 @@
 #include "motor_link_protocol.h"
 #include "uart2_link.h"
 
-#ifndef MOTOR_COMMAND_WATCHDOG_ENABLE
-#define MOTOR_COMMAND_WATCHDOG_ENABLE 0
-#endif
-
-#if MOTOR_COMMAND_WATCHDOG_ENABLE
-#include "motor_command_gate.h"
-#endif
-
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -252,6 +244,13 @@ sequence_is_fresh(
 
 /*
  * Publish only a fully validated and fresh command.
+ *
+ * Architectural boundary:
+ *
+ * This module deliberately stops at validation/publication. It does
+ * not refresh the command watchdog, alter ARM/DISARM state, or write
+ * PWM. main.c performs those actions in a defined safety order after
+ * command_receiver_process() returns.
  */
 static void
 publish_command(
@@ -315,24 +314,6 @@ publish_command(
 
     sequence_history_valid =
         true;
-
-
-#if MOTOR_COMMAND_WATCHDOG_ENABLE
-
-    /*
-     * This point is reached only for a fresh frame that already
-     * passed every protocol, CRC, range, requested-state and sequence
-     * check. The accepted frame itself is therefore current proof of
-     * a live command stream for the state-request decision.
-     *
-     * main.c still refreshes the independent command watchdog and
-     * remains the authority for timeout / FAILSAFE entry.
-     */
-    (void)motor_command_gate_apply(
-        &output,
-        true);
-
-#endif
 }
 
 
@@ -357,13 +338,6 @@ command_receiver_init(void)
 
     g_command_receiver_stats =
         (command_receiver_stats_t){0};
-
-
-#if MOTOR_COMMAND_WATCHDOG_ENABLE
-
-    (void)motor_command_gate_init();
-
-#endif
 }
 
 
@@ -380,13 +354,6 @@ command_receiver_reset_sequence_history(void)
 
     g_command_receiver_stats
         .sequence_history_reset_count++;
-
-
-#if MOTOR_COMMAND_WATCHDOG_ENABLE
-
-    motor_command_gate_reset_session();
-
-#endif
 }
 
 
