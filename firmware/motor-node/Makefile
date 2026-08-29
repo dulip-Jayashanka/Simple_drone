@@ -12,6 +12,11 @@
 #       DISARMED / ARMED / FAILSAFE state model
 #       latched command-timeout failsafe
 #
+#   Phase 6.2.5
+#       requested DISARMED / ARMED state carried with M1..M4
+#       local state-request safety gate
+#       DISARM-before-ARM communication-session interlock
+#
 # PWM remains outside this phase.
 #
 #
@@ -32,14 +37,14 @@
 #       MOTOR_NODE_LINK_UART_DEBUG=1
 #
 #
-# Phase 6.2 command watchdog:
+# Phase 6.2 / 6.2.5 command watchdog + requested-state gate:
 #
 #   make \
 #       MOTOR_NODE_LINK_ENABLE=1 \
 #       MOTOR_COMMAND_WATCHDOG_ENABLE=1
 #
 #
-# Phase 6.2 + received-value USART1 debug:
+# Phase 6.2 / 6.2.5 + received-value USART1 debug:
 #
 #   make \
 #       MOTOR_NODE_LINK_ENABLE=1 \
@@ -227,13 +232,14 @@ endif
 
 
 # ============================================================
-# PHASE 6.2 WATCHDOG OBJECT
+# PHASE 6.2 / 6.2.5 WATCHDOG + STATE-GATE OBJECTS
 # ============================================================
 
 ifeq ($(MOTOR_COMMAND_WATCHDOG_ENABLE),1)
 
 OBJECTS += \
-	$(BUILD_DIR)/command_watchdog.o
+	$(BUILD_DIR)/command_watchdog.o \
+	$(BUILD_DIR)/motor_command_gate.o
 
 endif
 
@@ -341,7 +347,8 @@ endif
 ifeq ($(MOTOR_COMMAND_WATCHDOG_ENABLE),1)
 
 MAIN_DEPS += \
-	$(INC_DIR)/command_watchdog.h
+	$(INC_DIR)/command_watchdog.h \
+	$(INC_DIR)/motor_command_gate.h
 
 endif
 
@@ -358,6 +365,7 @@ endif
 	test-state-host \
 	test-command-receiver-host \
 	test-command-watchdog-host \
+	test-motor-command-gate-host \
 	test-motor-link-protocol-host \
 	FORCE
 
@@ -423,6 +431,7 @@ $(BUILD_DIR)/motor_node_state.o: \
 $(BUILD_DIR)/command_receiver.o: \
 	$(SRC_DIR)/command_receiver.c \
 	$(INC_DIR)/command_receiver.h \
+	$(INC_DIR)/motor_command_gate.h \
 	$(MOTOR_LINK_DIR)/include/motor_link_protocol.h \
 	$(PLATFORM_DIR)/include/uart2_link.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -431,6 +440,14 @@ $(BUILD_DIR)/command_receiver.o: \
 $(BUILD_DIR)/command_watchdog.o: \
 	$(SRC_DIR)/command_watchdog.c \
 	$(INC_DIR)/command_watchdog.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+
+$(BUILD_DIR)/motor_command_gate.o: \
+	$(SRC_DIR)/motor_command_gate.c \
+	$(INC_DIR)/motor_command_gate.h \
+	$(INC_DIR)/command_receiver.h \
+	$(INC_DIR)/motor_node_state.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 
@@ -539,7 +556,7 @@ inspect: all
 	$(OBJDUMP) -h $(ELF)
 	$(OBJDUMP) -s -j .isr_vector $(ELF)
 	$(NM) -n $(ELF) | grep -E \
-		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|SysTick_Handler|USART2_IRQHandler|DMA1_Channel7_IRQHandler|g_fault_record|g_motor_safe_state_requested|g_motor_outputs_safe|motor_outputs_are_safe|g_system_time_status|g_milliseconds|g_uart_diag_status|g_uart_diag_output_ok|uart_diag_init|g_motor_command_uart_status|g_uart2_link_diag|g_latest_received_motor_command|g_command_receiver_stats|command_receiver_init|command_receiver_process|command_receiver_reset_sequence_history|g_command_watchdog_status|g_command_watchdog_timeout_ms|g_command_watchdog_last_age_ms|g_command_watchdog_timeout_event_count|command_watchdog_init|command_watchdog_process|command_watchdog_is_healthy|g_motor_node_state|g_motor_node_failsafe_reason|g_motor_node_state_initialized|g_disarmed_enforcement_count|g_armed_safe_enforcement_count|g_failsafe_enforcement_count|g_unexpected_state_count|g_arm_request_count|g_arm_accept_count|g_arm_reject_count|g_disarm_request_count|g_failsafe_entry_count|motor_node_state_init|motor_node_state_process|motor_node_state_request_arm|motor_node_state_request_disarm|motor_node_state_enter_failsafe|motor_node_is_disarmed|motor_node_is_armed|motor_node_is_failsafe'
+		'Reset_Handler|Default_Handler|NMI_Handler|HardFault_Handler|SysTick_Handler|USART2_IRQHandler|DMA1_Channel7_IRQHandler|g_fault_record|g_motor_safe_state_requested|g_motor_outputs_safe|motor_outputs_are_safe|g_system_time_status|g_milliseconds|g_uart_diag_status|g_uart_diag_output_ok|uart_diag_init|g_motor_command_uart_status|g_uart2_link_diag|g_latest_received_motor_command|g_command_receiver_stats|command_receiver_init|command_receiver_process|command_receiver_reset_sequence_history|g_command_watchdog_status|g_command_watchdog_timeout_ms|g_command_watchdog_last_age_ms|g_command_watchdog_timeout_event_count|command_watchdog_init|command_watchdog_process|command_watchdog_is_healthy|g_motor_command_gate_status|g_motor_command_gate_diag|motor_command_gate_init|motor_command_gate_reset_session|motor_command_gate_apply|motor_command_gate_disarm_seen|g_motor_node_state|g_motor_node_failsafe_reason|g_motor_node_state_initialized|g_disarmed_enforcement_count|g_armed_safe_enforcement_count|g_failsafe_enforcement_count|g_unexpected_state_count|g_arm_request_count|g_arm_accept_count|g_arm_reject_count|g_disarm_request_count|g_failsafe_entry_count|motor_node_state_init|motor_node_state_process|motor_node_state_request_arm|motor_node_state_request_disarm|motor_node_state_enter_failsafe|motor_node_is_disarmed|motor_node_is_armed|motor_node_is_failsafe'
 
 
 # ============================================================
@@ -623,6 +640,27 @@ test-command-watchdog-host:
 		$(TEST_DIR)/command_watchdog_test.c \
 		-o build/host/command_watchdog_test
 	./build/host/command_watchdog_test
+
+
+# ============================================================
+# HOST TEST — MOTOR COMMAND STATE GATE
+# ============================================================
+
+test-motor-command-gate-host:
+	mkdir -p build/host
+	$(HOST_CC) \
+		-std=c11 \
+		-Wall \
+		-Wextra \
+		-Werror \
+		-O0 \
+		-g3 \
+		-I$(INC_DIR) \
+		-I$(MOTOR_LINK_DIR)/include \
+		$(SRC_DIR)/motor_command_gate.c \
+		$(TEST_DIR)/motor_command_gate_test.c \
+		-o build/host/motor_command_gate_test
+	./build/host/motor_command_gate_test
 
 
 # ============================================================
