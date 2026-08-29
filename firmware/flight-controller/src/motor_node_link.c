@@ -25,17 +25,18 @@ static bool
     motor_node_link_ready;
 
 
-/*
- * Mixer values sent over this link must already be finite and
- * inside the mixer's normalized output interval.
- */
+static motor_link_requested_state_t
+    motor_node_link_requested_state;
+
+
+static uint32_t
+    arm_guard_frames_remaining;
+
+
 static bool
 normalized_motor_value_is_valid(
     float value)
 {
-    /*
-     * NaN is the only floating-point value unequal to itself.
-     */
     if (value != value)
     {
         return false;
@@ -50,15 +51,16 @@ normalized_motor_value_is_valid(
 }
 
 
-/*
- * Convert:
- *
- *     0.000 -> 0
- *     0.500 -> 500
- *     1.000 -> 1000
- *
- * with nearest-integer rounding.
- */
+static bool
+requested_state_is_valid(
+    motor_link_requested_state_t state)
+{
+    return
+        (state == MOTOR_LINK_REQUEST_DISARMED) ||
+        (state == MOTOR_LINK_REQUEST_ARMED);
+}
+
+
 static uint16_t
 normalized_to_wire_command(
     float value)
@@ -74,9 +76,6 @@ normalized_to_wire_command(
             0.5f);
 
 
-    /*
-     * Numerical guard.
-     */
     if (scaled >
         MOTOR_LINK_COMMAND_MAX)
     {
@@ -122,8 +121,22 @@ motor_node_link_init(
         false;
 
 
+    motor_node_link_requested_state =
+        MOTOR_LINK_REQUEST_DISARMED;
+
+
+    arm_guard_frames_remaining =
+        0UL;
+
+
     g_motor_node_link_diag =
         (motor_node_link_diag_t){0};
+
+
+    g_motor_node_link_diag
+        .requested_state =
+        (uint32_t)
+        MOTOR_LINK_REQUEST_DISARMED;
 
 
     if ((pclk1_hz == 0UL) ||
@@ -135,15 +148,6 @@ motor_node_link_init(
     }
 
 
-    /*
-     * Phase 6.1 is one-way:
-     *
-     * flight-controller TX -> motor-node RX.
-     *
-     * PA2 is therefore enabled here.
-     *
-     * PA3 remains free for the future reverse status channel.
-     */
     uart_status =
         uart2_link_init(
             pclk1_hz,
@@ -177,6 +181,87 @@ motor_node_link_init(
 
 
 motor_node_link_status_t
+motor_node_link_set_requested_state(
+    motor_link_requested_state_t requested_state)
+{
+    if (!motor_node_link_ready)
+    {
+        return
+            record_status(
+                MOTOR_NODE_LINK_NOT_READY);
+    }
+
+
+    if (!requested_state_is_valid(
+            requested_state))
+    {
+        g_motor_node_link_diag
+            .state_invalid_count++;
+
+
+        return
+            record_status(
+                MOTOR_NODE_LINK_STATE_INVALID);
+    }
+
+
+    if (requested_state ==
+        motor_node_link_requested_state)
+    {
+        return
+            record_status(
+                MOTOR_NODE_LINK_OK);
+    }
+
+
+    motor_node_link_requested_state =
+        requested_state;
+
+
+    g_motor_node_link_diag
+        .requested_state =
+        (uint32_t)
+        requested_state;
+
+
+    g_motor_node_link_diag
+        .state_change_count++;
+
+
+    if (requested_state ==
+        MOTOR_LINK_REQUEST_ARMED)
+    {
+        arm_guard_frames_remaining =
+            (uint32_t)
+            MOTOR_NODE_LINK_ARM_GUARD_FRAMES;
+    }
+    else
+    {
+        arm_guard_frames_remaining =
+            0UL;
+    }
+
+
+    g_motor_node_link_diag
+        .arm_guard_frames_remaining =
+        arm_guard_frames_remaining;
+
+
+    return
+        record_status(
+            MOTOR_NODE_LINK_OK);
+}
+
+
+motor_link_requested_state_t
+motor_node_link_get_requested_state(void)
+{
+    return
+        motor_node_link_requested_state;
+}
+
+
+motor_node_link_status_t
 motor_node_link_send(
     const motor_mixer_output_t *mixer_output)
 {
@@ -185,6 +270,9 @@ motor_node_link_send(
 
     motor_link_protocol_status_t
         protocol_status;
+
+    bool
+        zero_motor_command;
 
     uint8_t
         frame[
@@ -254,11 +342,19 @@ motor_node_link_send(
     }
 
 
-    /*
-     * Do not block the stabilization path waiting for UART.
-     *
-     * Also do not create a queue of old motor commands.
-     */
+    if (!requested_state_is_valid(
+            motor_node_link_requested_state))
+    {
+        g_motor_node_link_diag
+            .state_invalid_count++;
+
+
+        return
+            record_status(
+                MOTOR_NODE_LINK_STATE_INVALID);
+    }
+
+
     if (uart2_link_tx_busy())
     {
         g_motor_node_link_diag
@@ -275,21 +371,44 @@ motor_node_link_send(
         mixer_output->sequence;
 
 
-    command.m1 =
-        normalized_to_wire_command(
-            mixer_output->m1);
+    command.requested_state =
+        motor_node_link_requested_state;
 
-    command.m2 =
-        normalized_to_wire_command(
-            mixer_output->m2);
 
-    command.m3 =
-        normalized_to_wire_command(
-            mixer_output->m3);
+    zero_motor_command =
+        (motor_node_link_requested_state ==
+         MOTOR_LINK_REQUEST_DISARMED) ||
+        ((motor_node_link_requested_state ==
+          MOTOR_LINK_REQUEST_ARMED) &&
+         (arm_guard_frames_remaining !=
+          0UL));
 
-    command.m4 =
-        normalized_to_wire_command(
-            mixer_output->m4);
+
+    if (zero_motor_command)
+    {
+        command.m1 = 0U;
+        command.m2 = 0U;
+        command.m3 = 0U;
+        command.m4 = 0U;
+    }
+    else
+    {
+        command.m1 =
+            normalized_to_wire_command(
+                mixer_output->m1);
+
+        command.m2 =
+            normalized_to_wire_command(
+                mixer_output->m2);
+
+        command.m3 =
+            normalized_to_wire_command(
+                mixer_output->m3);
+
+        command.m4 =
+            normalized_to_wire_command(
+                mixer_output->m4);
+    }
 
 
     protocol_status =
@@ -352,6 +471,34 @@ motor_node_link_send(
     g_motor_node_link_diag
         .last_m4 =
         command.m4;
+
+
+    g_motor_node_link_diag
+        .last_sent_requested_state =
+        (uint32_t)
+        command.requested_state;
+
+
+    if (command.requested_state ==
+        MOTOR_LINK_REQUEST_DISARMED)
+    {
+        g_motor_node_link_diag
+            .disarmed_zero_frame_count++;
+    }
+    else if (arm_guard_frames_remaining !=
+             0UL)
+    {
+        g_motor_node_link_diag
+            .arm_guard_zero_frame_count++;
+
+
+        arm_guard_frames_remaining--;
+    }
+
+
+    g_motor_node_link_diag
+        .arm_guard_frames_remaining =
+        arm_guard_frames_remaining;
 
 
     return
