@@ -10,33 +10,30 @@
 /*
  * Validated motor command published by the motor-node receive layer.
  *
- * M1..M4 remain in protocol units:
+ * M1..M4 remain protocol-domain values:
  *
  *      0 ... 1000
  *
  * They are NOT PWM pulse widths.
  *
  * requested_state is the FC request carried in the same validated
- * MOTOR_COMMAND frame. The motor-node state gate decides whether that
- * request is safe to apply.
+ * MOTOR_COMMAND frame. The receiver does not itself refresh the
+ * watchdog, alter the local motor-node state, or write PWM. main.c
+ * performs those actions after validation in a defined safety order.
  */
 typedef struct
 {
     uint32_t sequence;
-
 
     uint16_t m1;
     uint16_t m2;
     uint16_t m3;
     uint16_t m4;
 
-
     motor_link_requested_state_t
         requested_state;
 
-
     uint32_t received_timestamp_ms;
-
 
     bool valid;
 
@@ -49,11 +46,9 @@ typedef struct
 
     uint32_t sync_discarded_bytes;
 
-
     uint32_t completed_frames;
 
     uint32_t valid_frames;
-
 
     uint32_t protocol_error_count;
 
@@ -71,7 +66,6 @@ typedef struct
 
     uint32_t state_error_count;
 
-
     uint32_t duplicate_sequence_count;
 
     uint32_t stale_sequence_count;
@@ -80,11 +74,9 @@ typedef struct
 
     uint32_t missing_sequence_count;
 
-
     uint32_t parser_resync_count;
 
     uint32_t sequence_history_reset_count;
-
 
     uint32_t last_valid_sequence;
 
@@ -97,7 +89,6 @@ typedef struct
 
 extern volatile command_receiver_output_t
     g_latest_received_motor_command;
-
 
 extern volatile command_receiver_stats_t
     g_command_receiver_stats;
@@ -113,7 +104,8 @@ command_receiver_init(void);
 /*
  * Drain every currently available USART2 RX byte.
  *
- * Returns number of newly accepted complete motor commands.
+ * Returns the number of newly accepted complete motor commands.
+ * g_latest_received_motor_command contains the newest accepted frame.
  */
 uint32_t
 command_receiver_process(
@@ -130,7 +122,7 @@ command_receiver_process(
  *     type
  *     length
  *     CRC
- *     motor ranges
+ *     M1..M4 ranges
  *     requested-state validation
  *     sequence freshness
  */
@@ -141,18 +133,14 @@ command_receiver_process_byte(
 
 
 /*
- * Forget sequence ordering history.
- *
- * The command watchdog calls this after a real communication-session
- * break so a rebooted FC can restart its sequence from zero.
+ * Forget sequence ordering history after a confirmed communication
+ * session break. The state-request gate has its own session-reset API
+ * and is intentionally controlled by main.c separately.
  */
 void
 command_receiver_reset_sequence_history(void);
 
 
-/*
- * Copy latest validated motor command and requested state.
- */
 bool
 command_receiver_get_latest(
     command_receiver_output_t *output);
