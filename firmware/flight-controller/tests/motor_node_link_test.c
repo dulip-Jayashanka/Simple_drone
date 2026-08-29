@@ -196,6 +196,208 @@ decode_captured(void)
 }
 
 
+#if MOTOR_ARM_BENCH_TEST
+
+static void
+test_bench_arm_waits_then_requests_once(void)
+{
+    motor_mixer_output_t output;
+    motor_link_motor_command_t command;
+    uint32_t i;
+
+
+    reset_stubs();
+
+
+    assert(
+        MOTOR_ARM_BENCH_DISARMED_FRAMES ==
+        3UL);
+
+    assert(
+        MOTOR_NODE_LINK_ARM_GUARD_FRAMES ==
+        2UL);
+
+
+    assert(
+        motor_node_link_init(
+            36000000UL,
+            230400UL) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    output = make_valid_output();
+
+
+    /*
+     * First successful frame: still DISARMED and zeroed.
+     */
+    output.sequence = 1UL;
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+    command = decode_captured();
+
+    assert(command.requested_state == MOTOR_LINK_REQUEST_DISARMED);
+    assert(command.m1 == 0U);
+    assert(g_motor_node_link_diag.disarmed_zero_frame_count == 1UL);
+    assert(g_motor_node_link_diag.bench_arm_request_count == 0UL);
+
+
+    /*
+     * A busy UART must not consume bench-delay progress.
+     */
+    stub_tx_busy = true;
+    output.sequence = 2UL;
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_TX_BUSY);
+
+    assert(g_motor_node_link_diag.disarmed_zero_frame_count == 1UL);
+
+
+    stub_tx_busy = false;
+
+
+    /*
+     * Second successful DISARMED frame: still no ARM request.
+     */
+    output.sequence = 3UL;
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+    command = decode_captured();
+
+    assert(command.requested_state == MOTOR_LINK_REQUEST_DISARMED);
+    assert(g_motor_node_link_diag.disarmed_zero_frame_count == 2UL);
+    assert(g_motor_node_link_diag.bench_arm_request_count == 0UL);
+
+
+    /*
+     * Third successful DISARMED frame is still transmitted as
+     * DISARMED, then the FC requested state changes to ARMED for the
+     * next frame.
+     */
+    output.sequence = 4UL;
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+    command = decode_captured();
+
+    assert(command.requested_state == MOTOR_LINK_REQUEST_DISARMED);
+    assert(command.m1 == 0U);
+    assert(command.m2 == 0U);
+    assert(command.m3 == 0U);
+    assert(command.m4 == 0U);
+
+    assert(
+        motor_node_link_get_requested_state() ==
+        MOTOR_LINK_REQUEST_ARMED);
+
+    assert(g_motor_node_link_diag.bench_arm_request_count == 1UL);
+    assert(g_motor_node_link_diag.bench_arm_request_issued == 1UL);
+    assert(
+        g_motor_node_link_diag
+            .bench_arm_trigger_disarmed_frame_count ==
+        3UL);
+
+    assert(
+        g_motor_node_link_diag
+            .arm_guard_frames_remaining ==
+        2UL);
+
+
+    /*
+     * Normal ARM guard is still fully active.
+     */
+    for (i = 0UL;
+         i < 2UL;
+         i++)
+    {
+        output.sequence++;
+
+        assert(
+            motor_node_link_send(
+                &output) ==
+            MOTOR_NODE_LINK_OK);
+
+        command = decode_captured();
+
+        assert(command.requested_state == MOTOR_LINK_REQUEST_ARMED);
+        assert(command.m1 == 0U);
+        assert(command.m2 == 0U);
+        assert(command.m3 == 0U);
+        assert(command.m4 == 0U);
+    }
+
+
+    assert(
+        g_motor_node_link_diag
+            .arm_guard_frames_remaining ==
+        0UL);
+
+
+    /*
+     * After guard completion, the real mixer values are released.
+     */
+    output.sequence++;
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+    command = decode_captured();
+
+    assert(command.requested_state == MOTOR_LINK_REQUEST_ARMED);
+    assert(command.m1 == 844U);
+    assert(command.m2 == 280U);
+    assert(command.m3 == 154U);
+    assert(command.m4 == 723U);
+
+
+    /*
+     * A later explicit DISARM stays DISARMED. Bench mode is one-shot
+     * and must never automatically re-arm after this point.
+     */
+    assert(
+        motor_node_link_set_requested_state(
+            MOTOR_LINK_REQUEST_DISARMED) ==
+        MOTOR_NODE_LINK_OK);
+
+
+    output.sequence++;
+
+    assert(
+        motor_node_link_send(
+            &output) ==
+        MOTOR_NODE_LINK_OK);
+
+    command = decode_captured();
+
+    assert(command.requested_state == MOTOR_LINK_REQUEST_DISARMED);
+    assert(command.m1 == 0U);
+
+    assert(
+        motor_node_link_get_requested_state() ==
+        MOTOR_LINK_REQUEST_DISARMED);
+
+    assert(g_motor_node_link_diag.bench_arm_request_count == 1UL);
+}
+
+
+#else
+
 static void
 test_initialization_defaults_disarmed(void)
 {
@@ -518,10 +720,22 @@ test_uart_start_failure_is_reported(void)
         1UL);
 }
 
+#endif
+
 
 int
 main(void)
 {
+#if MOTOR_ARM_BENCH_TEST
+
+    test_bench_arm_waits_then_requests_once();
+
+
+    puts(
+        "motor_arm_bench_test: PASS");
+
+#else
+
     test_initialization_defaults_disarmed();
     test_disarmed_forces_zero();
     test_arm_guard_then_releases_mixer();
@@ -533,6 +747,8 @@ main(void)
 
     puts(
         "motor_node_link_test: PASS");
+
+#endif
 
 
     return 0;
