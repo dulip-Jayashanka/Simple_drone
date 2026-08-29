@@ -62,12 +62,25 @@ MOTOR_MIXER_ENABLE ?= 0
 MOTOR_MIXER_UART_DEBUG ?= 0
 
 
-# FMCOM Phase 6.1.
+# FMCOM Phase 6.1 / 6.2.5.
 #
 # Dedicated FC -> motor-node binary link using USART2.
 MOTOR_NODE_LINK_ENABLE ?= 0
 
 MOTOR_NODE_LINK_BAUD ?= 230400
+
+
+# Temporary Phase 6.3 bench ARM source.
+#
+# Normal firmware MUST leave this at 0. When enabled, the FC first
+# transmits MOTOR_ARM_BENCH_DISARMED_FRAMES successful DISARMED
+# zero-command packets and then issues exactly one normal ARMED
+# request through motor_node_link. The existing 50-frame ARM guard
+# remains active and the motor-node safety gate/watchdog are not
+# bypassed.
+MOTOR_ARM_BENCH_TEST ?= 0
+
+MOTOR_ARM_BENCH_DISARMED_FRAMES ?= 500
 
 
 MEASURE_PIPELINE_TIMES ?= 0
@@ -108,6 +121,7 @@ BOOLEAN_BUILD_VALUES := \
 	$(MOTOR_MIXER_ENABLE) \
 	$(MOTOR_MIXER_UART_DEBUG) \
 	$(MOTOR_NODE_LINK_ENABLE) \
+	$(MOTOR_ARM_BENCH_TEST) \
 	$(MEASURE_PIPELINE_TIMES) \
 	$(MEASURE_RAW_TO_ATTITUDE_TIMES) \
 	$(ACCEL_PIPELINE_DEBUG_RAW) \
@@ -282,6 +296,18 @@ ifeq ($(MOTOR_NODE_LINK_ENABLE),1)
 ifneq ($(MOTOR_MIXER_ENABLE),1)
 
 $(error MOTOR_NODE_LINK_ENABLE requires MOTOR_MIXER_ENABLE=1)
+
+endif
+
+endif
+
+
+# Bench ARM is only meaningful when the normal motor-node link exists.
+ifeq ($(MOTOR_ARM_BENCH_TEST),1)
+
+ifneq ($(MOTOR_NODE_LINK_ENABLE),1)
+
+$(error MOTOR_ARM_BENCH_TEST requires MOTOR_NODE_LINK_ENABLE=1)
 
 endif
 
@@ -464,6 +490,8 @@ CFLAGS := $(CPU_FLAGS) \
 	-DMOTOR_MIXER_UART_DEBUG=$(MOTOR_MIXER_UART_DEBUG) \
 	-DMOTOR_NODE_LINK_ENABLE=$(MOTOR_NODE_LINK_ENABLE) \
 	-DMOTOR_NODE_LINK_BAUD=$(MOTOR_NODE_LINK_BAUD) \
+	-DMOTOR_ARM_BENCH_TEST=$(MOTOR_ARM_BENCH_TEST) \
+	-DMOTOR_ARM_BENCH_DISARMED_FRAMES=$(MOTOR_ARM_BENCH_DISARMED_FRAMES) \
 	-DMEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES) \
 	-DMEASURE_RAW_TO_ATTITUDE_TIMES=$(MEASURE_RAW_TO_ATTITUDE_TIMES) \
 	-DACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW) \
@@ -588,6 +616,7 @@ HEX := $(BUILD_DIR)/$(PROJECT).hex
 	test-mixer-host \
 	test-motor-link-protocol-host \
 	test-motor-node-link-host \
+	test-motor-arm-bench-host \
 	FORCE
 
 
@@ -630,6 +659,8 @@ $(CONFIG_STAMP): FORCE | $(BUILD_DIR)
 		'MOTOR_MIXER_UART_DEBUG=$(MOTOR_MIXER_UART_DEBUG)' \
 		'MOTOR_NODE_LINK_ENABLE=$(MOTOR_NODE_LINK_ENABLE)' \
 		'MOTOR_NODE_LINK_BAUD=$(MOTOR_NODE_LINK_BAUD)' \
+		'MOTOR_ARM_BENCH_TEST=$(MOTOR_ARM_BENCH_TEST)' \
+		'MOTOR_ARM_BENCH_DISARMED_FRAMES=$(MOTOR_ARM_BENCH_DISARMED_FRAMES)' \
 		'MEASURE_PIPELINE_TIMES=$(MEASURE_PIPELINE_TIMES)' \
 		'MEASURE_RAW_TO_ATTITUDE_TIMES=$(MEASURE_RAW_TO_ATTITUDE_TIMES)' \
 		'ACCEL_PIPELINE_DEBUG_RAW=$(ACCEL_PIPELINE_DEBUG_RAW)' \
@@ -888,6 +919,31 @@ test-motor-node-link-host:
 		-o build/host/motor_node_link_test
 
 	./build/host/motor_node_link_test
+
+
+test-motor-arm-bench-host:
+
+	mkdir -p build/host
+
+	$(HOST_CC) \
+		-std=c11 \
+		-Wall \
+		-Wextra \
+		-Werror \
+		-O0 \
+		-g3 \
+		-DMOTOR_ARM_BENCH_TEST=1 \
+		-DMOTOR_ARM_BENCH_DISARMED_FRAMES=3 \
+		-DMOTOR_NODE_LINK_ARM_GUARD_FRAMES=2 \
+		-Iinclude \
+		-I$(MOTOR_LINK_DIR)/include \
+		-I$(PLATFORM_DIR)/include \
+		tests/motor_node_link_test.c \
+		src/motor_node_link.c \
+		$(MOTOR_LINK_DIR)/src/motor_link_protocol.c \
+		-o build/host/motor_arm_bench_test
+
+	./build/host/motor_arm_bench_test
 
 
 clean:
