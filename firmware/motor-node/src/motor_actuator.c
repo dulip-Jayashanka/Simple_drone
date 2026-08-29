@@ -118,7 +118,8 @@ motor_actuator_init(void)
         MOTOR_ACTUATOR_STATUS_NOT_INITIALIZED;
 
 
-    if (!motor_pwm_is_initialized())
+    if ((!motor_pwm_is_initialized()) ||
+        (!motor_pwm_configuration_is_valid()))
     {
         (void)record_status(
             MOTOR_ACTUATOR_STATUS_PWM_NOT_READY);
@@ -210,7 +211,8 @@ motor_actuator_apply(
         m4_us;
 
 
-    if (!motor_actuator_ready)
+    if ((!motor_actuator_ready) ||
+        (!motor_pwm_configuration_is_valid()))
     {
         (void)record_status(
             MOTOR_ACTUATOR_STATUS_NOT_INITIALIZED);
@@ -312,7 +314,8 @@ motor_actuator_apply(
 bool
 motor_actuator_set_safe(void)
 {
-    if (!motor_actuator_ready)
+    if ((!motor_actuator_ready) ||
+        (!motor_pwm_configuration_is_valid()))
     {
         (void)record_status(
             MOTOR_ACTUATOR_STATUS_NOT_INITIALIZED);
@@ -411,5 +414,6 @@ motor_actuator_is_ready(void)
 {
     return
         motor_actuator_ready &&
-        motor_pwm_is_initialized();
+        motor_pwm_is_initialized() &&
+        motor_pwm_configuration_is_valid();
 }
