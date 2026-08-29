@@ -3,6 +3,14 @@
 #include "motor_link_protocol.h"
 #include "uart2_link.h"
 
+#ifndef MOTOR_COMMAND_WATCHDOG_ENABLE
+#define MOTOR_COMMAND_WATCHDOG_ENABLE 0
+#endif
+
+#if MOTOR_COMMAND_WATCHDOG_ENABLE
+#include "motor_command_gate.h"
+#endif
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -54,19 +62,10 @@ static void
 parser_resynchronize_after_invalid_frame(void)
 {
     uint32_t i;
-
     uint32_t j;
-
     uint32_t remaining;
 
 
-    /*
-     * Look for another complete sync sequence inside the rejected
-     * frame.
-     *
-     * This is useful after a byte loss because part of the next
-     * packet may already have entered the current 19-byte candidate.
-     */
     for (i = 1UL;
          (i + 1UL) <
          frame_index;
@@ -106,9 +105,6 @@ parser_resynchronize_after_invalid_frame(void)
     }
 
 
-    /*
-     * A trailing 0xA5 could be the first byte of the next packet.
-     */
     if ((frame_index !=
          0UL) &&
         (frame_buffer[
@@ -194,6 +190,14 @@ record_protocol_error(
             break;
 
 
+        case MOTOR_LINK_PROTOCOL_STATE_ERROR:
+
+            g_command_receiver_stats
+                .state_error_count++;
+
+            break;
+
+
         default:
 
             break;
@@ -203,20 +207,6 @@ record_protocol_error(
 
 /*
  * Compare uint32_t sequence numbers in modulo-2^32 space.
- *
- * delta:
- *
- *     0                       duplicate
- *
- *     1 .. 0x7FFFFFFF         newer
- *
- *     0x80000000 .. FFFFFFFF  older/stale
- *
- * This naturally accepts:
- *
- *     0xFFFFFFFF -> 0
- *
- * because the unsigned delta is 1.
  */
 static bool
 sequence_is_fresh(
@@ -289,6 +279,10 @@ publish_command(
         command->m4;
 
 
+    output.requested_state =
+        command->requested_state;
+
+
     output.received_timestamp_ms =
         now_ms;
 
@@ -321,14 +315,26 @@ publish_command(
 
     sequence_history_valid =
         true;
+
+
+#if MOTOR_COMMAND_WATCHDOG_ENABLE
+
+    /*
+     * This point is reached only for a fresh frame that already
+     * passed every protocol, CRC, range, requested-state and sequence
+     * check. The accepted frame itself is therefore current proof of
+     * a live command stream for the state-request decision.
+     *
+     * main.c still refreshes the independent command watchdog and
+     * remains the authority for timeout / FAILSAFE entry.
+     */
+    (void)motor_command_gate_apply(
+        &output,
+        true);
+
+#endif
 }
 
-
-/*
- * ============================================================
- * Public interface
- * ============================================================
- */
 
 void
 command_receiver_init(void)
@@ -351,6 +357,13 @@ command_receiver_init(void)
 
     g_command_receiver_stats =
         (command_receiver_stats_t){0};
+
+
+#if MOTOR_COMMAND_WATCHDOG_ENABLE
+
+    (void)motor_command_gate_init();
+
+#endif
 }
 
 
@@ -367,6 +380,13 @@ command_receiver_reset_sequence_history(void)
 
     g_command_receiver_stats
         .sequence_history_reset_count++;
+
+
+#if MOTOR_COMMAND_WATCHDOG_ENABLE
+
+    motor_command_gate_reset_session();
+
+#endif
 }
 
 
@@ -391,11 +411,6 @@ command_receiver_process_byte(
         .bytes_processed++;
 
 
-    /*
-     * --------------------------------------------------------
-     * Waiting for first sync byte.
-     * --------------------------------------------------------
-     */
     if (frame_index ==
         0UL)
     {
@@ -422,11 +437,6 @@ command_receiver_process_byte(
     }
 
 
-    /*
-     * --------------------------------------------------------
-     * Waiting for second sync byte.
-     * --------------------------------------------------------
-     */
     if (frame_index ==
         1UL)
     {
@@ -448,9 +458,6 @@ command_receiver_process_byte(
         if (byte ==
             MOTOR_LINK_SYNC_1)
         {
-            /*
-             * Keep newest possible first-sync byte.
-             */
             frame_buffer[0] =
                 byte;
 
@@ -463,9 +470,6 @@ command_receiver_process_byte(
         }
 
 
-        /*
-         * Original A5 and this non-5A byte are both discarded.
-         */
         g_command_receiver_stats
             .sync_discarded_bytes +=
             2UL;
@@ -478,11 +482,6 @@ command_receiver_process_byte(
     }
 
 
-    /*
-     * --------------------------------------------------------
-     * Collect remaining fixed-length frame bytes.
-     * --------------------------------------------------------
-     */
     frame_buffer[
         frame_index] =
         byte;
@@ -509,13 +508,6 @@ command_receiver_process_byte(
             &command);
 
 
-    /*
-     * Any malformed/corrupt packet is rejected.
-     *
-     * Most importantly:
-     *
-     * it never changes g_latest_received_motor_command.
-     */
     if (protocol_status !=
         MOTOR_LINK_PROTOCOL_OK)
     {
@@ -530,11 +522,6 @@ command_receiver_process_byte(
     }
 
 
-    /*
-     * --------------------------------------------------------
-     * Sequence validation.
-     * --------------------------------------------------------
-     */
     if (!sequence_is_fresh(
             command.sequence,
             &sequence_delta))
@@ -564,13 +551,6 @@ command_receiver_process_byte(
     }
 
 
-    /*
-     * A missing command is diagnostic information.
-     *
-     * The newest correctly validated command remains more useful
-     * than an older lost command, so a forward sequence gap is
-     * accepted.
-     */
     if (sequence_history_valid &&
         (sequence_delta >
          1UL))
@@ -613,11 +593,6 @@ command_receiver_process(
         0UL;
 
 
-    /*
-     * Consume every byte currently buffered by USART2 ISR.
-     *
-     * This code executes in normal main-loop context.
-     */
     while (uart2_link_read_byte(
                &byte))
     {
@@ -673,6 +648,11 @@ command_receiver_get_latest(
     output->m4 =
         g_latest_received_motor_command
             .m4;
+
+
+    output->requested_state =
+        g_latest_received_motor_command
+            .requested_state;
 
 
     output->received_timestamp_ms =
