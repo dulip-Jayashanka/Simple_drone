@@ -118,6 +118,10 @@ make_frame(
         m4;
 
 
+    command.requested_state =
+        MOTOR_LINK_REQUEST_DISARMED;
+
+
     assert(
         motor_link_encode_motor_command(
             &command,
@@ -215,6 +219,11 @@ test_valid_frame(void)
     assert(
         output.m4 ==
         400U);
+
+
+    assert(
+        output.requested_state ==
+        MOTOR_LINK_REQUEST_DISARMED);
 
 
     assert(
@@ -339,6 +348,54 @@ test_crc_error_is_rejected(void)
 
 
 static void
+test_state_crc_error_is_rejected(void)
+{
+    uint8_t
+        frame[
+            MOTOR_LINK_MOTOR_COMMAND_FRAME_SIZE];
+
+
+    command_receiver_output_t
+        output;
+
+
+    command_receiver_init();
+
+
+    make_frame(
+        31UL,
+        10U,
+        20U,
+        30U,
+        40U,
+        frame);
+
+
+    frame[17] =
+        (uint8_t)
+        MOTOR_LINK_REQUEST_ARMED;
+
+
+    assert(
+        feed_frame(
+            frame,
+            4UL) ==
+        0UL);
+
+
+    assert(
+        !command_receiver_get_latest(
+            &output));
+
+
+    assert(
+        g_command_receiver_stats
+            .crc_error_count ==
+        1UL);
+}
+
+
+static void
 test_duplicate_gap_and_stale_sequence_policy(void)
 {
     uint8_t
@@ -369,9 +426,6 @@ test_duplicate_gap_and_stale_sequence_policy(void)
         1UL);
 
 
-    /*
-     * Duplicate.
-     */
     make_frame(
         100UL,
         2U,
@@ -394,11 +448,6 @@ test_duplicate_gap_and_stale_sequence_policy(void)
         1UL);
 
 
-    /*
-     * Sequence 101 was lost.
-     *
-     * 102 is still the newest valid command and must be accepted.
-     */
     make_frame(
         102UL,
         3U,
@@ -427,9 +476,6 @@ test_duplicate_gap_and_stale_sequence_policy(void)
         1UL);
 
 
-    /*
-     * Late/stale 101.
-     */
     make_frame(
         101UL,
         4U,
@@ -494,9 +540,6 @@ test_sequence_wrap(void)
         1UL);
 
 
-    /*
-     * Natural uint32_t wrap.
-     */
     make_frame(
         0UL,
         5U,
@@ -577,9 +620,6 @@ test_dropped_byte_recovers_on_next_frame(void)
         0UL;
 
 
-    /*
-     * Drop one byte in first frame.
-     */
     for (i = 0UL;
          i <
          MOTOR_LINK_MOTOR_COMMAND_FRAME_SIZE;
@@ -601,11 +641,6 @@ test_dropped_byte_recovers_on_next_frame(void)
     }
 
 
-    /*
-     * Immediately send the next complete frame.
-     *
-     * Parser should resynchronize and recover.
-     */
     for (i = 0UL;
          i <
          MOTOR_LINK_MOTOR_COMMAND_FRAME_SIZE;
@@ -732,9 +767,6 @@ test_explicit_sequence_history_reset_accepts_new_session(void)
     command_receiver_init();
 
 
-    /*
-     * Existing FC session.
-     */
     make_frame(
         5000UL,
         10U,
@@ -751,11 +783,6 @@ test_explicit_sequence_history_reset_accepts_new_session(void)
         1UL);
 
 
-    /*
-     * Imagine FC rebooted and restarted its sequence.
-     *
-     * Without an identified session break this should be stale.
-     */
     make_frame(
         1UL,
         50U,
@@ -778,10 +805,6 @@ test_explicit_sequence_history_reset_accepts_new_session(void)
         1UL);
 
 
-    /*
-     * Later watchdog/failsafe code can declare the previous
-     * communication session ended.
-     */
     command_receiver_reset_sequence_history();
 
 
@@ -813,19 +836,13 @@ int
 main(void)
 {
     test_valid_frame();
-
     test_noise_before_sync_is_discarded();
-
     test_crc_error_is_rejected();
-
+    test_state_crc_error_is_rejected();
     test_duplicate_gap_and_stale_sequence_policy();
-
     test_sequence_wrap();
-
     test_dropped_byte_recovers_on_next_frame();
-
     test_back_to_back_frames();
-
     test_explicit_sequence_history_reset_accepts_new_session();
 
 
