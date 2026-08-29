@@ -17,7 +17,8 @@
 #define MOTOR_LINK_OFFSET_M3           13U
 #define MOTOR_LINK_OFFSET_M4           15U
 
-#define MOTOR_LINK_OFFSET_CRC          17U
+#define MOTOR_LINK_OFFSET_STATE        17U
+#define MOTOR_LINK_OFFSET_CRC          18U
 
 
 #define MOTOR_LINK_CRC_START_OFFSET    \
@@ -26,9 +27,9 @@
 /*
  * Bytes:
  *
- * 2..16 inclusive = 15 bytes.
+ * 2..17 inclusive = 16 bytes.
  */
-#define MOTOR_LINK_CRC_INPUT_LENGTH    15U
+#define MOTOR_LINK_CRC_INPUT_LENGTH    16U
 
 
 static void
@@ -114,6 +115,16 @@ command_values_in_range(
         (command->m2 <= MOTOR_LINK_COMMAND_MAX) &&
         (command->m3 <= MOTOR_LINK_COMMAND_MAX) &&
         (command->m4 <= MOTOR_LINK_COMMAND_MAX);
+}
+
+
+static int
+requested_state_is_valid(
+    motor_link_requested_state_t state)
+{
+    return
+        (state == MOTOR_LINK_REQUEST_DISARMED) ||
+        (state == MOTOR_LINK_REQUEST_ARMED);
 }
 
 
@@ -211,6 +222,14 @@ motor_link_encode_motor_command(
     }
 
 
+    if (!requested_state_is_valid(
+            command->requested_state))
+    {
+        return
+            MOTOR_LINK_PROTOCOL_STATE_ERROR;
+    }
+
+
     frame[MOTOR_LINK_OFFSET_SYNC_1] =
         MOTOR_LINK_SYNC_1;
 
@@ -252,6 +271,11 @@ motor_link_encode_motor_command(
         &frame[
             MOTOR_LINK_OFFSET_M4],
         command->m4);
+
+
+    frame[MOTOR_LINK_OFFSET_STATE] =
+        (uint8_t)
+        command->requested_state;
 
 
     crc =
@@ -393,11 +417,24 @@ motor_link_decode_motor_command(
                 MOTOR_LINK_OFFSET_M4]);
 
 
+    candidate.requested_state =
+        (motor_link_requested_state_t)
+        frame[MOTOR_LINK_OFFSET_STATE];
+
+
     if (!command_values_in_range(
             &candidate))
     {
         return
             MOTOR_LINK_PROTOCOL_RANGE_ERROR;
+    }
+
+
+    if (!requested_state_is_valid(
+            candidate.requested_state))
+    {
+        return
+            MOTOR_LINK_PROTOCOL_STATE_ERROR;
     }
 
 
