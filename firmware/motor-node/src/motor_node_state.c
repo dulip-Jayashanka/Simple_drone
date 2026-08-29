@@ -2,6 +2,14 @@
 
 #include "motor_outputs.h"
 
+#ifndef MOTOR_PWM_ENABLE
+#define MOTOR_PWM_ENABLE 0
+#endif
+
+#if MOTOR_PWM_ENABLE
+#include "motor_actuator.h"
+#endif
+
 
 /*
  * DISARMED is zero so reset-time .bss remains fail-safe.
@@ -72,12 +80,8 @@ volatile uint32_t
  * ============================================================
  * FAILSAFE LATCH
  * ============================================================
- *
- * This helper changes only the logical state/reason.
- *
- * Physical safe-output enforcement is performed separately so the
- * caller can report whether that hardware operation succeeded.
  */
+
 static void
 latch_failsafe_state(
     motor_node_failsafe_reason_t reason)
@@ -91,10 +95,7 @@ latch_failsafe_state(
 
 
     /*
-     * Preserve the original entry reason while already in FAILSAFE.
-     *
-     * This makes the debugger-visible reason identify the event that
-     * originally caused the state transition.
+     * Preserve the reason that originally caused FAILSAFE entry.
      */
     if (g_motor_node_state !=
         MOTOR_NODE_STATE_FAILSAFE)
@@ -114,20 +115,58 @@ latch_failsafe_state(
 
 /*
  * ============================================================
- * DISARMED OUTPUT POLICY
+ * NORMAL DISARMED OUTPUT POLICY
  * ============================================================
+ *
+ * Phase 6.3 deliberately distinguishes two safe-output concepts:
+ *
+ *     normal ESC-safe state
+ *         TIM3 remains active at MOTOR_ESC_SAFE_US
+ *
+ *     hard/fatal safe state
+ *         PA6/PA7/PB0/PB1 are ordinary GPIO LOW
+ *
+ * With MOTOR_PWM_ENABLE=0 the previous Phase 6.2 GPIO-LOW policy is
+ * preserved exactly.
  */
 
 static bool
 disarmed_outputs_enforce(void)
 {
+    bool
+        outputs_safe;
+
+
+#if MOTOR_PWM_ENABLE
+
+    outputs_safe =
+        motor_actuator_set_safe();
+
+
+    if (!outputs_safe)
+    {
+        /*
+         * If normal ESC-safe PWM itself cannot be established, fall
+         * back to the strongest hardware shutdown immediately.
+         */
+        motor_outputs_force_safe();
+    }
+
+#else
+
     motor_outputs_force_safe();
+
+
+    outputs_safe =
+        motor_outputs_are_safe();
+
+#endif
 
 
     g_disarmed_enforcement_count++;
 
 
-    if (!motor_outputs_are_safe())
+    if (!outputs_safe)
     {
         g_disarmed_safety_failure_count++;
 
@@ -142,30 +181,52 @@ disarmed_outputs_enforce(void)
 
 /*
  * ============================================================
- * ARMED OUTPUT POLICY — PHASE 6.2
+ * ARMED OUTPUT POLICY
  * ============================================================
  *
- * IMPORTANT:
+ * In Phase 6.3 ARMED no longer overwrites the current motor command
+ * with a safe value on every loop. The fresh validated command path
+ * in main.c owns M1..M4 updates while ARMED.
  *
- * ARMED is only a logical application state in this phase.
- *
- * PWM has NOT been implemented yet.
- *
- * Therefore ARMED continues forcing PA6, PA7, PB0 and PB1 into
- * the existing verified-safe LOW configuration.
- *
- * Phase 6.3 will replace only the physical ARMED output policy.
+ * State processing only verifies that the actuator/PWM boundary is
+ * still ready. The historical debugger counter name is retained for
+ * compatibility; in PWM builds it counts ARMED output-readiness
+ * checks rather than repeated GPIO-safe writes.
  */
+
 static bool
-armed_phase62_outputs_enforce(void)
+armed_outputs_enforce(void)
 {
+    bool
+        outputs_ready;
+
+
+#if MOTOR_PWM_ENABLE
+
+    outputs_ready =
+        motor_actuator_is_ready();
+
+
+    if (!outputs_ready)
+    {
+        motor_outputs_force_safe();
+    }
+
+#else
+
     motor_outputs_force_safe();
+
+
+    outputs_ready =
+        motor_outputs_are_safe();
+
+#endif
 
 
     g_armed_safe_enforcement_count++;
 
 
-    if (!motor_outputs_are_safe())
+    if (!outputs_ready)
     {
         g_armed_safety_failure_count++;
 
@@ -182,18 +243,45 @@ armed_phase62_outputs_enforce(void)
  * ============================================================
  * FAILSAFE OUTPUT POLICY
  * ============================================================
+ *
+ * Normal command-timeout FAILSAFE uses the ESC-safe PWM value when
+ * PWM is available. A PWM/output subsystem failure itself falls back
+ * to hard GPIO LOW.
  */
 
 static bool
 failsafe_outputs_enforce(void)
 {
+    bool
+        outputs_safe;
+
+
+#if MOTOR_PWM_ENABLE
+
+    outputs_safe =
+        motor_actuator_set_safe();
+
+
+    if (!outputs_safe)
+    {
+        motor_outputs_force_safe();
+    }
+
+#else
+
     motor_outputs_force_safe();
+
+
+    outputs_safe =
+        motor_outputs_are_safe();
+
+#endif
 
 
     g_failsafe_enforcement_count++;
 
 
-    if (!motor_outputs_are_safe())
+    if (!outputs_safe)
     {
         g_failsafe_safety_failure_count++;
 
@@ -271,9 +359,6 @@ motor_node_state_init(void)
         0UL;
 
 
-    /*
-     * Every power-on/reset explicitly returns to DISARMED.
-     */
     g_motor_node_state =
         MOTOR_NODE_STATE_DISARMED;
 
@@ -320,12 +405,6 @@ motor_node_state_process(void)
     if (g_motor_node_state_initialized ==
         0UL)
     {
-        /*
-         * Initialization never completed successfully.
-         *
-         * Still request the physical safe state before returning
-         * failure.
-         */
         motor_outputs_force_safe();
 
 
@@ -354,11 +433,8 @@ motor_node_state_process(void)
 
         case MOTOR_NODE_STATE_ARMED:
 
-            /*
-             * Phase 6.2 still holds physical motor outputs LOW.
-             */
             outputs_safe =
-                armed_phase62_outputs_enforce();
+                armed_outputs_enforce();
 
 
             if (!outputs_safe)
@@ -380,12 +456,6 @@ motor_node_state_process(void)
 
         default:
 
-            /*
-             * An impossible/corrupt application state is not silently
-             * converted back to normal operation.
-             *
-             * It becomes a latched FAILSAFE.
-             */
             g_unexpected_state_count++;
 
 
@@ -417,10 +487,7 @@ motor_node_state_request_arm(
 
 
     /*
-     * Arm only from initialized DISARMED state and only while the
-     * command stream is currently healthy.
-     *
-     * FAILSAFE therefore cannot directly transition to ARMED.
+     * Direct FAILSAFE -> ARMED remains impossible.
      */
     if ((g_motor_node_state_initialized ==
          0UL) ||
@@ -436,8 +503,9 @@ motor_node_state_request_arm(
 
 
     /*
-     * Verify physical safe state once more before changing the
-     * logical application state.
+     * Re-establish/verify the normal DISARMED physical state before
+     * granting the logical ARM transition. The state gate separately
+     * requires an all-zero ARM transition packet.
      */
     outputs_safe =
         disarmed_outputs_enforce();
@@ -456,11 +524,6 @@ motor_node_state_request_arm(
     }
 
 
-    /*
-     * Logical ARMED only.
-     *
-     * Phase 6.2 still has no PWM.
-     */
     g_motor_node_state =
         MOTOR_NODE_STATE_ARMED;
 
@@ -503,14 +566,12 @@ motor_node_state_request_disarm(void)
 
 
     /*
-     * Explicit disarm always attempts physical shutdown before
-     * accepting the logical transition.
+     * DISARM first establishes the normal physical safe policy and
+     * only then accepts the logical transition. In a PWM build this
+     * is four ESC-safe pulses; without PWM it remains hard GPIO LOW.
      */
-    motor_outputs_force_safe();
-
-
     outputs_safe =
-        motor_outputs_are_safe();
+        disarmed_outputs_enforce();
 
 
     if (!outputs_safe)
@@ -524,7 +585,7 @@ motor_node_state_request_disarm(void)
 
 
     /*
-     * Explicit DISARM is the permitted recovery from FAILSAFE.
+     * Explicit DISARM remains the permitted FAILSAFE recovery path.
      */
     g_motor_node_state =
         MOTOR_NODE_STATE_DISARMED;
@@ -548,10 +609,6 @@ bool
 motor_node_state_enter_failsafe(
     motor_node_failsafe_reason_t reason)
 {
-    /*
-     * Logical state is latched first, then physical safety is
-     * immediately enforced.
-     */
     latch_failsafe_state(
         reason);
 
@@ -592,10 +649,6 @@ motor_node_is_armed(void)
 bool
 motor_node_is_failsafe(void)
 {
-    /*
-     * FAILSAFE can also be entered because initialization itself
-     * failed, so this helper does not require initialized == 1.
-     */
     return
         g_motor_node_state ==
         MOTOR_NODE_STATE_FAILSAFE;
