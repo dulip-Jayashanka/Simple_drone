@@ -10,16 +10,26 @@
  * MOTOR-NODE APPLICATION STATES
  * ============================================================
  *
- * DISARMED remains zero intentionally.
+ * DISARMED remains zero intentionally so reset-time .bss naturally
+ * represents the safest normal application state.
  *
- * The reset-time .bss value therefore naturally represents the
- * safest normal application state.
- *
- * Phase 6.2 / 6.2.5:
+ * Phase 6.3 physical policy when MOTOR_PWM_ENABLE=1:
  *
  *     DISARMED
- *     ARMED       logical only; PWM is still not implemented
- *     FAILSAFE    latched until explicit disarm/reset
+ *         TIM3 remains active at the configured ESC-safe pulse.
+ *
+ *     ARMED
+ *         validated fresh M1..M4 commands may drive the actuator.
+ *
+ *     FAILSAFE
+ *         latched until explicit DISARM; TIM3 returns immediately to
+ *         the configured ESC-safe pulse.
+ *
+ * Fatal/output-subsystem failures are stronger than the normal state
+ * policy and fall back to the existing hard GPIO-LOW shutdown path.
+ *
+ * With MOTOR_PWM_ENABLE=0 the previous Phase 6.2/6.2.5 behavior is
+ * preserved: every state physically holds the four motor pins LOW.
  */
 typedef enum
 {
@@ -73,6 +83,16 @@ extern volatile uint32_t
     g_disarmed_enforcement_count;
 
 
+/*
+ * Historical name retained for debugger/build compatibility.
+ *
+ * PWM disabled:
+ *     counts ARMED GPIO-safe enforcement.
+ *
+ * PWM enabled:
+ *     counts ARMED actuator/PWM readiness checks; it does not mean
+ *     the active motor command was overwritten with a safe value.
+ */
 extern volatile uint32_t
     g_armed_safe_enforcement_count;
 
@@ -118,19 +138,19 @@ extern volatile uint32_t
 
 
 /*
- * Initialize in DISARMED and immediately verify physical motor
- * outputs are safe.
+ * Initialize in DISARMED and establish the appropriate physical safe
+ * policy for the selected build.
  */
 bool
 motor_node_state_init(void);
 
 
 /*
- * Execute one iteration of the current state policy.
+ * Execute one iteration of the current local state policy.
  *
- * Phase 6.2/6.2.5 deliberately keeps all physical motor outputs safe
- * LOW even while logically ARMED. Phase 6.3 will replace only the
- * physical ARMED output policy.
+ * In a Phase 6.3 PWM build ARMED deliberately does not rewrite the
+ * current M1..M4 output. Fresh command application is owned by the
+ * validated receive path in main.c.
  */
 bool
 motor_node_state_process(void);
@@ -139,11 +159,9 @@ motor_node_state_process(void);
 /*
  * Request logical ARMED state.
  *
- * command_stream_healthy must be true.
- *
- * The version-2 MOTOR_COMMAND requested-state gate may call this only
- * after the packet has passed protocol validation and its local ARM
- * interlocks have passed.
+ * command_stream_healthy must be true. The version-2 command gate may
+ * call this only after protocol validation and its local interlocks
+ * have passed.
  */
 bool
 motor_node_state_request_arm(
@@ -151,25 +169,22 @@ motor_node_state_request_arm(
 
 
 /*
- * Explicitly return to DISARMED.
- *
- * This is also the permitted recovery path from a latched FAILSAFE.
+ * Explicitly return to DISARMED after establishing normal physical
+ * safe output. This remains the permitted recovery from FAILSAFE.
  */
 bool
 motor_node_state_request_disarm(void);
 
 
 /*
- * Immediately latch FAILSAFE and enforce safe motor outputs.
+ * Immediately latch FAILSAFE and enforce the normal failsafe output
+ * policy. In a PWM build this is the configured ESC-safe pulse.
  */
 bool
 motor_node_state_enter_failsafe(
     motor_node_failsafe_reason_t reason);
 
 
-/*
- * State helpers.
- */
 bool
 motor_node_is_disarmed(void);
 
