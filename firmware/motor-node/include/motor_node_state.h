@@ -15,7 +15,7 @@
  * The reset-time .bss value therefore naturally represents the
  * safest normal application state.
  *
- * Phase 6.2:
+ * Phase 6.2 / 6.2.5:
  *
  *     DISARMED
  *     ARMED       logical only; PWM is still not implemented
@@ -128,8 +128,9 @@ motor_node_state_init(void);
 /*
  * Execute one iteration of the current state policy.
  *
- * Phase 6.2 deliberately keeps all physical motor outputs safe LOW
- * even while logically ARMED.
+ * Phase 6.2/6.2.5 deliberately keeps all physical motor outputs safe
+ * LOW even while logically ARMED. Phase 6.3 will replace only the
+ * physical ARMED output policy.
  */
 bool
 motor_node_state_process(void);
@@ -140,7 +141,9 @@ motor_node_state_process(void);
  *
  * command_stream_healthy must be true.
  *
- * Ordinary MOTOR_COMMAND packets never call this automatically.
+ * The version-2 MOTOR_COMMAND requested-state gate may call this only
+ * after the packet has passed protocol validation and its local ARM
+ * interlocks have passed.
  */
 bool
 motor_node_state_request_arm(
