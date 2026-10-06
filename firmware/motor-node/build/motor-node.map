@@ -6,6 +6,7 @@ Discarded input sections
  .group         0x00000000        0xc build/main.o
  .group         0x00000000        0xc build/main.o
  .group         0x00000000        0xc build/main.o
+ .group         0x00000000        0xc build/main.o
  .text          0x00000000        0x0 build/main.o
  .data          0x00000000        0x0 build/main.o
  .bss           0x00000000        0x0 build/main.o
@@ -28,14 +29,6 @@ Discarded input sections
  .text          0x00000000        0x0 build/motor_node_state.o
  .data          0x00000000        0x0 build/motor_node_state.o
  .bss           0x00000000        0x0 build/motor_node_state.o
- .text.motor_node_state_request_arm
-                0x00000000       0xa0 build/motor_node_state.o
- .text.motor_node_state_request_disarm
-                0x00000000       0x68 build/motor_node_state.o
- .text.motor_node_is_disarmed
-                0x00000000       0x34 build/motor_node_state.o
- .text.motor_node_is_failsafe
-                0x00000000       0x20 build/motor_node_state.o
  .debug_macro   0x00000000      0xaea build/motor_node_state.o
  .debug_macro   0x00000000       0x22 build/motor_node_state.o
  .debug_macro   0x00000000      0x34e build/motor_node_state.o
@@ -135,8 +128,9 @@ Discarded input sections
  .data          0x00000000        0x0 build/command_receiver.o
  .bss           0x00000000        0x0 build/command_receiver.o
  .debug_macro   0x00000000      0xaea build/command_receiver.o
- .debug_macro   0x00000000       0x22 build/command_receiver.o
  .debug_macro   0x00000000      0x34e build/command_receiver.o
+ .debug_macro   0x00000000       0x40 build/command_receiver.o
+ .debug_macro   0x00000000       0x22 build/command_receiver.o
  .debug_macro   0x00000000       0x16 build/command_receiver.o
  .comment       0x00000000       0x27 build/command_receiver.o
  .group         0x00000000        0xc build/motor_link_protocol.o
@@ -150,9 +144,10 @@ Discarded input sections
  .text.write_u32_le
                 0x00000000       0x40 build/motor_link_protocol.o
  .text.motor_link_encode_motor_command
-                0x00000000       0xdc build/motor_link_protocol.o
+                0x00000000       0xfa build/motor_link_protocol.o
  .debug_macro   0x00000000      0xaea build/motor_link_protocol.o
  .debug_macro   0x00000000      0x34e build/motor_link_protocol.o
+ .debug_macro   0x00000000       0x40 build/motor_link_protocol.o
  .comment       0x00000000       0x27 build/motor_link_protocol.o
  .group         0x00000000        0xc build/uart2_link.o
  .group         0x00000000        0xc build/uart2_link.o
@@ -187,6 +182,20 @@ Discarded input sections
  .debug_macro   0x00000000       0x22 build/command_watchdog.o
  .debug_macro   0x00000000      0x34e build/command_watchdog.o
  .comment       0x00000000       0x27 build/command_watchdog.o
+ .group         0x00000000        0xc build/motor_command_gate.o
+ .group         0x00000000        0xc build/motor_command_gate.o
+ .group         0x00000000        0xc build/motor_command_gate.o
+ .group         0x00000000        0xc build/motor_command_gate.o
+ .text          0x00000000        0x0 build/motor_command_gate.o
+ .data          0x00000000        0x0 build/motor_command_gate.o
+ .bss           0x00000000        0x0 build/motor_command_gate.o
+ .text.motor_command_gate_disarm_seen
+                0x00000000       0x30 build/motor_command_gate.o
+ .debug_macro   0x00000000      0xaea build/motor_command_gate.o
+ .debug_macro   0x00000000      0x34e build/motor_command_gate.o
+ .debug_macro   0x00000000       0x40 build/motor_command_gate.o
+ .debug_macro   0x00000000       0x22 build/motor_command_gate.o
+ .comment       0x00000000       0x27 build/motor_command_gate.o
 
 Memory Configuration
 
@@ -212,6 +221,7 @@ LOAD build/command_receiver.o
 LOAD build/motor_link_protocol.o
 LOAD build/uart2_link.o
 LOAD build/command_watchdog.o
+LOAD build/motor_command_gate.o
 LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a
                 0x20005000                        _estack = (ORIGIN (RAM) + LENGTH (RAM))
 
@@ -222,7 +232,7 @@ LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a
                 0x08000000                vector_table
                 0x080000ec                        . = ALIGN (0x4)
 
-.text           0x080000ec     0x27b4
+.text           0x080000ec     0x2c20
                 0x080000ec                        . = ALIGN (0x4)
  *(.text)
  *(.text*)
@@ -262,359 +272,386 @@ LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a
  .text.motor_node_state_process
                 0x080009b4       0x9c build/motor_node_state.o
                 0x080009b4                motor_node_state_process
+ .text.motor_node_state_request_arm
+                0x08000a50       0xa0 build/motor_node_state.o
+                0x08000a50                motor_node_state_request_arm
+ .text.motor_node_state_request_disarm
+                0x08000af0       0x68 build/motor_node_state.o
+                0x08000af0                motor_node_state_request_disarm
  .text.motor_node_state_enter_failsafe
-                0x08000a50       0x20 build/motor_node_state.o
-                0x08000a50                motor_node_state_enter_failsafe
+                0x08000b58       0x20 build/motor_node_state.o
+                0x08000b58                motor_node_state_enter_failsafe
+ .text.motor_node_is_disarmed
+                0x08000b78       0x34 build/motor_node_state.o
+                0x08000b78                motor_node_is_disarmed
  .text.motor_node_is_armed
-                0x08000a70       0x34 build/motor_node_state.o
-                0x08000a70                motor_node_is_armed
- .text.memset   0x08000aa4       0x3a build/freestanding_mem.o
-                0x08000aa4                memset
+                0x08000bac       0x34 build/motor_node_state.o
+                0x08000bac                motor_node_is_armed
+ .text.motor_node_is_failsafe
+                0x08000be0       0x20 build/motor_node_state.o
+                0x08000be0                motor_node_is_failsafe
+ .text.memset   0x08000c00       0x3a build/freestanding_mem.o
+                0x08000c00                memset
  .text.fault_test_run
-                0x08000ade        0xc build/fault_test.o
-                0x08000ade                fault_test_run
+                0x08000c3a        0xc build/fault_test.o
+                0x08000c3a                fault_test_run
  .text.MemManage_Handler
-                0x08000aea        0x8 build/startup_stm32f103c8.o
-                0x08000aea                MemManage_Handler
+                0x08000c46        0x8 build/startup_stm32f103c8.o
+                0x08000c46                MemManage_Handler
  .text.BusFault_Handler
-                0x08000af2        0x8 build/startup_stm32f103c8.o
-                0x08000af2                BusFault_Handler
+                0x08000c4e        0x8 build/startup_stm32f103c8.o
+                0x08000c4e                BusFault_Handler
  .text.UsageFault_Handler
-                0x08000afa        0x8 build/startup_stm32f103c8.o
-                0x08000afa                UsageFault_Handler
+                0x08000c56        0x8 build/startup_stm32f103c8.o
+                0x08000c56                UsageFault_Handler
  .text.SVC_Handler
-                0x08000b02        0x8 build/startup_stm32f103c8.o
-                0x08000b02                SVC_Handler
+                0x08000c5e        0x8 build/startup_stm32f103c8.o
+                0x08000c5e                SVC_Handler
  .text.DebugMon_Handler
-                0x08000b0a        0x8 build/startup_stm32f103c8.o
-                0x08000b0a                DebugMon_Handler
+                0x08000c66        0x8 build/startup_stm32f103c8.o
+                0x08000c66                DebugMon_Handler
  .text.PendSV_Handler
-                0x08000b12        0x8 build/startup_stm32f103c8.o
-                0x08000b12                PendSV_Handler
+                0x08000c6e        0x8 build/startup_stm32f103c8.o
+                0x08000c6e                PendSV_Handler
  .text.WWDG_IRQHandler
-                0x08000b1a        0x8 build/startup_stm32f103c8.o
-                0x08000b1a                WWDG_IRQHandler
+                0x08000c76        0x8 build/startup_stm32f103c8.o
+                0x08000c76                WWDG_IRQHandler
  .text.PVD_IRQHandler
-                0x08000b22        0x8 build/startup_stm32f103c8.o
-                0x08000b22                PVD_IRQHandler
+                0x08000c7e        0x8 build/startup_stm32f103c8.o
+                0x08000c7e                PVD_IRQHandler
  .text.TAMPER_IRQHandler
-                0x08000b2a        0x8 build/startup_stm32f103c8.o
-                0x08000b2a                TAMPER_IRQHandler
+                0x08000c86        0x8 build/startup_stm32f103c8.o
+                0x08000c86                TAMPER_IRQHandler
  .text.RTC_IRQHandler
-                0x08000b32        0x8 build/startup_stm32f103c8.o
-                0x08000b32                RTC_IRQHandler
+                0x08000c8e        0x8 build/startup_stm32f103c8.o
+                0x08000c8e                RTC_IRQHandler
  .text.FLASH_IRQHandler
-                0x08000b3a        0x8 build/startup_stm32f103c8.o
-                0x08000b3a                FLASH_IRQHandler
+                0x08000c96        0x8 build/startup_stm32f103c8.o
+                0x08000c96                FLASH_IRQHandler
  .text.RCC_IRQHandler
-                0x08000b42        0x8 build/startup_stm32f103c8.o
-                0x08000b42                RCC_IRQHandler
+                0x08000c9e        0x8 build/startup_stm32f103c8.o
+                0x08000c9e                RCC_IRQHandler
  .text.EXTI0_IRQHandler
-                0x08000b4a        0x8 build/startup_stm32f103c8.o
-                0x08000b4a                EXTI0_IRQHandler
+                0x08000ca6        0x8 build/startup_stm32f103c8.o
+                0x08000ca6                EXTI0_IRQHandler
  .text.EXTI1_IRQHandler
-                0x08000b52        0x8 build/startup_stm32f103c8.o
-                0x08000b52                EXTI1_IRQHandler
+                0x08000cae        0x8 build/startup_stm32f103c8.o
+                0x08000cae                EXTI1_IRQHandler
  .text.EXTI2_IRQHandler
-                0x08000b5a        0x8 build/startup_stm32f103c8.o
-                0x08000b5a                EXTI2_IRQHandler
+                0x08000cb6        0x8 build/startup_stm32f103c8.o
+                0x08000cb6                EXTI2_IRQHandler
  .text.EXTI3_IRQHandler
-                0x08000b62        0x8 build/startup_stm32f103c8.o
-                0x08000b62                EXTI3_IRQHandler
+                0x08000cbe        0x8 build/startup_stm32f103c8.o
+                0x08000cbe                EXTI3_IRQHandler
  .text.EXTI4_IRQHandler
-                0x08000b6a        0x8 build/startup_stm32f103c8.o
-                0x08000b6a                EXTI4_IRQHandler
+                0x08000cc6        0x8 build/startup_stm32f103c8.o
+                0x08000cc6                EXTI4_IRQHandler
  .text.DMA1_Channel1_IRQHandler
-                0x08000b72        0x8 build/startup_stm32f103c8.o
-                0x08000b72                DMA1_Channel1_IRQHandler
+                0x08000cce        0x8 build/startup_stm32f103c8.o
+                0x08000cce                DMA1_Channel1_IRQHandler
  .text.DMA1_Channel2_IRQHandler
-                0x08000b7a        0x8 build/startup_stm32f103c8.o
-                0x08000b7a                DMA1_Channel2_IRQHandler
+                0x08000cd6        0x8 build/startup_stm32f103c8.o
+                0x08000cd6                DMA1_Channel2_IRQHandler
  .text.DMA1_Channel3_IRQHandler
-                0x08000b82        0x8 build/startup_stm32f103c8.o
-                0x08000b82                DMA1_Channel3_IRQHandler
+                0x08000cde        0x8 build/startup_stm32f103c8.o
+                0x08000cde                DMA1_Channel3_IRQHandler
  .text.DMA1_Channel4_IRQHandler
-                0x08000b8a        0x8 build/startup_stm32f103c8.o
-                0x08000b8a                DMA1_Channel4_IRQHandler
+                0x08000ce6        0x8 build/startup_stm32f103c8.o
+                0x08000ce6                DMA1_Channel4_IRQHandler
  .text.DMA1_Channel5_IRQHandler
-                0x08000b92        0x8 build/startup_stm32f103c8.o
-                0x08000b92                DMA1_Channel5_IRQHandler
+                0x08000cee        0x8 build/startup_stm32f103c8.o
+                0x08000cee                DMA1_Channel5_IRQHandler
  .text.DMA1_Channel6_IRQHandler
-                0x08000b9a        0x8 build/startup_stm32f103c8.o
-                0x08000b9a                DMA1_Channel6_IRQHandler
+                0x08000cf6        0x8 build/startup_stm32f103c8.o
+                0x08000cf6                DMA1_Channel6_IRQHandler
  .text.ADC1_2_IRQHandler
-                0x08000ba2        0x8 build/startup_stm32f103c8.o
-                0x08000ba2                ADC1_2_IRQHandler
+                0x08000cfe        0x8 build/startup_stm32f103c8.o
+                0x08000cfe                ADC1_2_IRQHandler
  .text.USB_HP_CAN1_TX_IRQHandler
-                0x08000baa        0x8 build/startup_stm32f103c8.o
-                0x08000baa                USB_HP_CAN1_TX_IRQHandler
+                0x08000d06        0x8 build/startup_stm32f103c8.o
+                0x08000d06                USB_HP_CAN1_TX_IRQHandler
  .text.USB_LP_CAN1_RX0_IRQHandler
-                0x08000bb2        0x8 build/startup_stm32f103c8.o
-                0x08000bb2                USB_LP_CAN1_RX0_IRQHandler
+                0x08000d0e        0x8 build/startup_stm32f103c8.o
+                0x08000d0e                USB_LP_CAN1_RX0_IRQHandler
  .text.CAN1_RX1_IRQHandler
-                0x08000bba        0x8 build/startup_stm32f103c8.o
-                0x08000bba                CAN1_RX1_IRQHandler
+                0x08000d16        0x8 build/startup_stm32f103c8.o
+                0x08000d16                CAN1_RX1_IRQHandler
  .text.CAN1_SCE_IRQHandler
-                0x08000bc2        0x8 build/startup_stm32f103c8.o
-                0x08000bc2                CAN1_SCE_IRQHandler
+                0x08000d1e        0x8 build/startup_stm32f103c8.o
+                0x08000d1e                CAN1_SCE_IRQHandler
  .text.EXTI9_5_IRQHandler
-                0x08000bca        0x8 build/startup_stm32f103c8.o
-                0x08000bca                EXTI9_5_IRQHandler
+                0x08000d26        0x8 build/startup_stm32f103c8.o
+                0x08000d26                EXTI9_5_IRQHandler
  .text.TIM1_BRK_IRQHandler
-                0x08000bd2        0x8 build/startup_stm32f103c8.o
-                0x08000bd2                TIM1_BRK_IRQHandler
+                0x08000d2e        0x8 build/startup_stm32f103c8.o
+                0x08000d2e                TIM1_BRK_IRQHandler
  .text.TIM1_UP_IRQHandler
-                0x08000bda        0x8 build/startup_stm32f103c8.o
-                0x08000bda                TIM1_UP_IRQHandler
+                0x08000d36        0x8 build/startup_stm32f103c8.o
+                0x08000d36                TIM1_UP_IRQHandler
  .text.TIM1_TRG_COM_IRQHandler
-                0x08000be2        0x8 build/startup_stm32f103c8.o
-                0x08000be2                TIM1_TRG_COM_IRQHandler
+                0x08000d3e        0x8 build/startup_stm32f103c8.o
+                0x08000d3e                TIM1_TRG_COM_IRQHandler
  .text.TIM1_CC_IRQHandler
-                0x08000bea        0x8 build/startup_stm32f103c8.o
-                0x08000bea                TIM1_CC_IRQHandler
+                0x08000d46        0x8 build/startup_stm32f103c8.o
+                0x08000d46                TIM1_CC_IRQHandler
  .text.TIM2_IRQHandler
-                0x08000bf2        0x8 build/startup_stm32f103c8.o
-                0x08000bf2                TIM2_IRQHandler
+                0x08000d4e        0x8 build/startup_stm32f103c8.o
+                0x08000d4e                TIM2_IRQHandler
  .text.TIM3_IRQHandler
-                0x08000bfa        0x8 build/startup_stm32f103c8.o
-                0x08000bfa                TIM3_IRQHandler
+                0x08000d56        0x8 build/startup_stm32f103c8.o
+                0x08000d56                TIM3_IRQHandler
  .text.TIM4_IRQHandler
-                0x08000c02        0x8 build/startup_stm32f103c8.o
-                0x08000c02                TIM4_IRQHandler
+                0x08000d5e        0x8 build/startup_stm32f103c8.o
+                0x08000d5e                TIM4_IRQHandler
  .text.I2C1_EV_IRQHandler
-                0x08000c0a        0x8 build/startup_stm32f103c8.o
-                0x08000c0a                I2C1_EV_IRQHandler
+                0x08000d66        0x8 build/startup_stm32f103c8.o
+                0x08000d66                I2C1_EV_IRQHandler
  .text.I2C1_ER_IRQHandler
-                0x08000c12        0x8 build/startup_stm32f103c8.o
-                0x08000c12                I2C1_ER_IRQHandler
+                0x08000d6e        0x8 build/startup_stm32f103c8.o
+                0x08000d6e                I2C1_ER_IRQHandler
  .text.I2C2_EV_IRQHandler
-                0x08000c1a        0x8 build/startup_stm32f103c8.o
-                0x08000c1a                I2C2_EV_IRQHandler
+                0x08000d76        0x8 build/startup_stm32f103c8.o
+                0x08000d76                I2C2_EV_IRQHandler
  .text.I2C2_ER_IRQHandler
-                0x08000c22        0x8 build/startup_stm32f103c8.o
-                0x08000c22                I2C2_ER_IRQHandler
+                0x08000d7e        0x8 build/startup_stm32f103c8.o
+                0x08000d7e                I2C2_ER_IRQHandler
  .text.SPI1_IRQHandler
-                0x08000c2a        0x8 build/startup_stm32f103c8.o
-                0x08000c2a                SPI1_IRQHandler
+                0x08000d86        0x8 build/startup_stm32f103c8.o
+                0x08000d86                SPI1_IRQHandler
  .text.SPI2_IRQHandler
-                0x08000c32        0x8 build/startup_stm32f103c8.o
-                0x08000c32                SPI2_IRQHandler
+                0x08000d8e        0x8 build/startup_stm32f103c8.o
+                0x08000d8e                SPI2_IRQHandler
  .text.USART1_IRQHandler
-                0x08000c3a        0x8 build/startup_stm32f103c8.o
-                0x08000c3a                USART1_IRQHandler
+                0x08000d96        0x8 build/startup_stm32f103c8.o
+                0x08000d96                USART1_IRQHandler
  .text.USART3_IRQHandler
-                0x08000c42        0x8 build/startup_stm32f103c8.o
-                0x08000c42                USART3_IRQHandler
+                0x08000d9e        0x8 build/startup_stm32f103c8.o
+                0x08000d9e                USART3_IRQHandler
  .text.EXTI15_10_IRQHandler
-                0x08000c4a        0x8 build/startup_stm32f103c8.o
-                0x08000c4a                EXTI15_10_IRQHandler
+                0x08000da6        0x8 build/startup_stm32f103c8.o
+                0x08000da6                EXTI15_10_IRQHandler
  .text.RTC_Alarm_IRQHandler
-                0x08000c52        0x8 build/startup_stm32f103c8.o
-                0x08000c52                RTC_Alarm_IRQHandler
+                0x08000dae        0x8 build/startup_stm32f103c8.o
+                0x08000dae                RTC_Alarm_IRQHandler
  .text.USBWakeUp_IRQHandler
-                0x08000c5a        0x8 build/startup_stm32f103c8.o
-                0x08000c5a                USBWakeUp_IRQHandler
- *fill*         0x08000c62        0x2 
+                0x08000db6        0x8 build/startup_stm32f103c8.o
+                0x08000db6                USBWakeUp_IRQHandler
+ *fill*         0x08000dbe        0x2 
  .text.Reset_Handler
-                0x08000c64       0x64 build/startup_stm32f103c8.o
-                0x08000c64                Reset_Handler
+                0x08000dc0       0x64 build/startup_stm32f103c8.o
+                0x08000dc0                Reset_Handler
  .text.wait_for_register_value
-                0x08000cc8       0x54 build/system_clock.o
+                0x08000e24       0x54 build/system_clock.o
  .text.record_reset_hsi_clock_tree
-                0x08000d1c       0x48 build/system_clock.o
+                0x08000e78       0x48 build/system_clock.o
  .text.fallback_to_hsi
-                0x08000d64       0xc8 build/system_clock.o
+                0x08000ec0       0xc8 build/system_clock.o
  .text.system_clock_init
-                0x08000e2c      0x118 build/system_clock.o
-                0x08000e2c                system_clock_init
+                0x08000f88      0x118 build/system_clock.o
+                0x08000f88                system_clock_init
  .text.system_clock_get_sysclk_hz
-                0x08000f44       0x14 build/system_clock.o
-                0x08000f44                system_clock_get_sysclk_hz
+                0x080010a0       0x14 build/system_clock.o
+                0x080010a0                system_clock_get_sysclk_hz
  .text.system_clock_get_hclk_hz
-                0x08000f58       0x14 build/system_clock.o
-                0x08000f58                system_clock_get_hclk_hz
+                0x080010b4       0x14 build/system_clock.o
+                0x080010b4                system_clock_get_hclk_hz
  .text.system_clock_get_pclk1_hz
-                0x08000f6c       0x14 build/system_clock.o
-                0x08000f6c                system_clock_get_pclk1_hz
+                0x080010c8       0x14 build/system_clock.o
+                0x080010c8                system_clock_get_pclk1_hz
  .text.system_clock_get_pclk2_hz
-                0x08000f80       0x14 build/system_clock.o
-                0x08000f80                system_clock_get_pclk2_hz
+                0x080010dc       0x14 build/system_clock.o
+                0x080010dc                system_clock_get_pclk2_hz
  .text.system_clock_get_adcclk_hz
-                0x08000f94       0x14 build/system_clock.o
-                0x08000f94                system_clock_get_adcclk_hz
+                0x080010f0       0x14 build/system_clock.o
+                0x080010f0                system_clock_get_adcclk_hz
  .text.disable_maskable_interrupts
-                0x08000fa8        0xe build/fault_handlers.o
+                0x08001104        0xe build/fault_handlers.o
  .text.read_active_exception
-                0x08000fb6       0x1c build/fault_handlers.o
- *fill*         0x08000fd2        0x2 
+                0x08001112       0x1c build/fault_handlers.o
+ *fill*         0x0800112e        0x2 
  .text.clear_saved_stack_frame
-                0x08000fd4       0x40 build/fault_handlers.o
+                0x08001130       0x40 build/fault_handlers.o
  .text.capture_system_fault_registers
-                0x08001014       0x64 build/fault_handlers.o
+                0x08001170       0x64 build/fault_handlers.o
  .text.begin_fault_record
-                0x08001078       0x3c build/fault_handlers.o
+                0x080011d4       0x3c build/fault_handlers.o
  .text.finish_fault_record
-                0x080010b4       0x28 build/fault_handlers.o
+                0x08001210       0x28 build/fault_handlers.o
  .text.stop_after_fault
-                0x080010dc        0x8 build/fault_handlers.o
+                0x08001238        0x8 build/fault_handlers.o
  .text.fault_record_clear
-                0x080010e4       0x40 build/fault_handlers.o
-                0x080010e4                fault_record_clear
+                0x08001240       0x40 build/fault_handlers.o
+                0x08001240                fault_record_clear
  .text.Default_Handler
-                0x08001124       0x1a build/fault_handlers.o
-                0x08001124                Default_Handler
- *fill*         0x0800113e        0x2 
+                0x08001280       0x1a build/fault_handlers.o
+                0x08001280                Default_Handler
+ *fill*         0x0800129a        0x2 
  .text.NMI_Handler
-                0x08001140       0x38 build/fault_handlers.o
-                0x08001140                NMI_Handler
+                0x0800129c       0x38 build/fault_handlers.o
+                0x0800129c                NMI_Handler
  .text.HardFault_Handler
-                0x08001178       0x16 build/fault_handlers.o
-                0x08001178                HardFault_Handler
- *fill*         0x0800118e        0x2 
+                0x080012d4       0x16 build/fault_handlers.o
+                0x080012d4                HardFault_Handler
+ *fill*         0x080012ea        0x2 
  .text.hard_fault_capture
-                0x08001190       0x70 build/fault_handlers.o
-                0x08001190                hard_fault_capture
+                0x080012ec       0x70 build/fault_handlers.o
+                0x080012ec                hard_fault_capture
  .text.status_led_init
-                0x08001200       0x50 build/status_led.o
-                0x08001200                status_led_init
+                0x0800135c       0x50 build/status_led.o
+                0x0800135c                status_led_init
  .text.status_led_on
-                0x08001250       0x18 build/status_led.o
-                0x08001250                status_led_on
+                0x080013ac       0x18 build/status_led.o
+                0x080013ac                status_led_on
  .text.status_led_off
-                0x08001268       0x18 build/status_led.o
-                0x08001268                status_led_off
+                0x080013c4       0x18 build/status_led.o
+                0x080013c4                status_led_off
  .text.status_led_toggle
-                0x08001280       0x24 build/status_led.o
-                0x08001280                status_led_toggle
+                0x080013dc       0x24 build/status_led.o
+                0x080013dc                status_led_toggle
  .text.system_time_init
-                0x080012a4       0xb4 build/system_time.o
-                0x080012a4                system_time_init
- .text.millis   0x08001358       0x14 build/system_time.o
-                0x08001358                millis
+                0x08001400       0xb4 build/system_time.o
+                0x08001400                system_time_init
+ .text.millis   0x080014b4       0x14 build/system_time.o
+                0x080014b4                millis
  .text.SysTick_Handler
-                0x0800136c       0x1c build/system_time.o
-                0x0800136c                SysTick_Handler
+                0x080014c8       0x1c build/system_time.o
+                0x080014c8                SysTick_Handler
  .text.uart_diag_wait_for_txe
-                0x08001388       0x50 build/uart_diag.o
+                0x080014e4       0x50 build/uart_diag.o
  .text.uart_diag_init
-                0x080013d8      0x108 build/uart_diag.o
-                0x080013d8                uart_diag_init
+                0x08001534      0x108 build/uart_diag.o
+                0x08001534                uart_diag_init
  .text.uart_diag_write_char
-                0x080014e0       0x44 build/uart_diag.o
-                0x080014e0                uart_diag_write_char
+                0x0800163c       0x44 build/uart_diag.o
+                0x0800163c                uart_diag_write_char
  .text.uart_diag_write_string
-                0x08001524       0x44 build/uart_diag.o
-                0x08001524                uart_diag_write_string
+                0x08001680       0x44 build/uart_diag.o
+                0x08001680                uart_diag_write_string
  .text.uart_diag_write_line
-                0x08001568       0x34 build/uart_diag.o
-                0x08001568                uart_diag_write_line
+                0x080016c4       0x34 build/uart_diag.o
+                0x080016c4                uart_diag_write_line
  .text.uart_diag_write_uint32
-                0x0800159c       0x98 build/uart_diag.o
-                0x0800159c                uart_diag_write_uint32
+                0x080016f8       0x98 build/uart_diag.o
+                0x080016f8                uart_diag_write_uint32
  .text.parser_clear
-                0x08001634       0x18 build/command_receiver.o
+                0x08001790       0x18 build/command_receiver.o
  .text.parser_resynchronize_after_invalid_frame
-                0x0800164c       0xc0 build/command_receiver.o
+                0x080017a8       0xc0 build/command_receiver.o
  .text.record_protocol_error
-                0x0800170c       0x94 build/command_receiver.o
+                0x08001868       0xa4 build/command_receiver.o
  .text.sequence_is_fresh
-                0x080017a0       0x68 build/command_receiver.o
+                0x0800190c       0x68 build/command_receiver.o
  .text.publish_command
-                0x08001808       0x80 build/command_receiver.o
+                0x08001974       0x94 build/command_receiver.o
  .text.command_receiver_init
-                0x08001888       0x54 build/command_receiver.o
-                0x08001888                command_receiver_init
+                0x08001a08       0x58 build/command_receiver.o
+                0x08001a08                command_receiver_init
  .text.command_receiver_reset_sequence_history
-                0x080018dc       0x30 build/command_receiver.o
-                0x080018dc                command_receiver_reset_sequence_history
+                0x08001a60       0x30 build/command_receiver.o
+                0x08001a60                command_receiver_reset_sequence_history
  .text.command_receiver_process_byte
-                0x0800190c      0x174 build/command_receiver.o
-                0x0800190c                command_receiver_process_byte
+                0x08001a90      0x174 build/command_receiver.o
+                0x08001a90                command_receiver_process_byte
  .text.command_receiver_process
-                0x08001a80       0x3e build/command_receiver.o
-                0x08001a80                command_receiver_process
- *fill*         0x08001abe        0x2 
+                0x08001c04       0x3e build/command_receiver.o
+                0x08001c04                command_receiver_process
+ *fill*         0x08001c42        0x2 
  .text.command_receiver_get_latest
-                0x08001ac0       0x78 build/command_receiver.o
-                0x08001ac0                command_receiver_get_latest
+                0x08001c44       0x84 build/command_receiver.o
+                0x08001c44                command_receiver_get_latest
  .text.read_u16_le
-                0x08001b38       0x2a build/motor_link_protocol.o
+                0x08001cc8       0x2a build/motor_link_protocol.o
  .text.read_u32_le
-                0x08001b62       0x36 build/motor_link_protocol.o
+                0x08001cf2       0x36 build/motor_link_protocol.o
  .text.command_values_in_range
-                0x08001b98       0x4a build/motor_link_protocol.o
+                0x08001d28       0x4a build/motor_link_protocol.o
+ .text.requested_state_is_valid
+                0x08001d72       0x26 build/motor_link_protocol.o
  .text.motor_link_crc16_ccitt_false
-                0x08001be2       0x84 build/motor_link_protocol.o
-                0x08001be2                motor_link_crc16_ccitt_false
+                0x08001d98       0x84 build/motor_link_protocol.o
+                0x08001d98                motor_link_crc16_ccitt_false
  .text.motor_link_decode_motor_command
-                0x08001c66      0x104 build/motor_link_protocol.o
-                0x08001c66                motor_link_decode_motor_command
+                0x08001e1c      0x120 build/motor_link_protocol.o
+                0x08001e1c                motor_link_decode_motor_command
  .text.enter_critical
-                0x08001d6a       0x1a build/uart2_link.o
+                0x08001f3c       0x1a build/uart2_link.o
  .text.exit_critical
-                0x08001d84       0x1e build/uart2_link.o
- *fill*         0x08001da2        0x2 
+                0x08001f56       0x1e build/uart2_link.o
  .text.configure_gpio
-                0x08001da4       0x6c build/uart2_link.o
+                0x08001f74       0x6c build/uart2_link.o
  .text.gpio_configuration_is_valid
-                0x08001e10       0x50 build/uart2_link.o
+                0x08001fe0       0x50 build/uart2_link.o
  .text.configure_tx_dma
-                0x08001e60       0x80 build/uart2_link.o
+                0x08002030       0x80 build/uart2_link.o
  .text.configure_rx_interrupt
-                0x08001ee0       0x20 build/uart2_link.o
+                0x080020b0       0x20 build/uart2_link.o
  .text.uart2_link_init
-                0x08001f00      0x1f0 build/uart2_link.o
-                0x08001f00                uart2_link_init
+                0x080020d0      0x1f0 build/uart2_link.o
+                0x080020d0                uart2_link_init
  .text.uart2_link_read_byte
-                0x080020f0       0x94 build/uart2_link.o
-                0x080020f0                uart2_link_read_byte
+                0x080022c0       0x94 build/uart2_link.o
+                0x080022c0                uart2_link_read_byte
  .text.DMA1_Channel7_IRQHandler
-                0x08002184       0x88 build/uart2_link.o
-                0x08002184                DMA1_Channel7_IRQHandler
+                0x08002354       0x88 build/uart2_link.o
+                0x08002354                DMA1_Channel7_IRQHandler
  .text.USART2_IRQHandler
-                0x0800220c      0x114 build/uart2_link.o
-                0x0800220c                USART2_IRQHandler
+                0x080023dc      0x114 build/uart2_link.o
+                0x080023dc                USART2_IRQHandler
  .text.command_watchdog_init
-                0x08002320       0x90 build/command_watchdog.o
-                0x08002320                command_watchdog_init
+                0x080024f0       0x90 build/command_watchdog.o
+                0x080024f0                command_watchdog_init
  .text.command_watchdog_note_valid_command
-                0x080023b0       0x80 build/command_watchdog.o
-                0x080023b0                command_watchdog_note_valid_command
+                0x08002580       0x80 build/command_watchdog.o
+                0x08002580                command_watchdog_note_valid_command
  .text.command_watchdog_process
-                0x08002430       0xa4 build/command_watchdog.o
-                0x08002430                command_watchdog_process
+                0x08002600       0xa4 build/command_watchdog.o
+                0x08002600                command_watchdog_process
  .text.command_watchdog_get_status
-                0x080024d4       0x18 build/command_watchdog.o
-                0x080024d4                command_watchdog_get_status
+                0x080026a4       0x18 build/command_watchdog.o
+                0x080026a4                command_watchdog_get_status
+ .text.commands_are_zero
+                0x080026bc       0x3e build/motor_command_gate.o
+ *fill*         0x080026fa        0x2 
+ .text.record_status
+                0x080026fc       0x2c build/motor_command_gate.o
+ .text.motor_command_gate_init
+                0x08002728       0x44 build/motor_command_gate.o
+                0x08002728                motor_command_gate_init
+ .text.motor_command_gate_reset_session
+                0x0800276c       0x34 build/motor_command_gate.o
+                0x0800276c                motor_command_gate_reset_session
+ .text.motor_command_gate_apply
+                0x080027a0      0x1b8 build/motor_command_gate.o
+                0x080027a0                motor_command_gate_apply
  *(.rodata)
- .rodata        0x080024ec      0x3aa build/main.o
- *fill*         0x08002896        0x2 
- .rodata        0x08002898        0x7 build/uart_diag.o
+ .rodata        0x08002958      0x3aa build/main.o
+ *fill*         0x08002d02        0x2 
+ .rodata        0x08002d04        0x7 build/uart_diag.o
  *(.rodata*)
-                0x080028a0                        . = ALIGN (0x4)
- *fill*         0x0800289f        0x1 
-                0x080028a0                        _etext = .
-                0x080028a0                        _sidata = LOADADDR (.data)
+                0x08002d0c                        . = ALIGN (0x4)
+ *fill*         0x08002d0b        0x1 
+                0x08002d0c                        _etext = .
+                0x08002d0c                        _sidata = LOADADDR (.data)
 
-.glue_7         0x080028a0        0x0
- .glue_7        0x080028a0        0x0 linker stubs
+.glue_7         0x08002d0c        0x0
+ .glue_7        0x08002d0c        0x0 linker stubs
 
-.glue_7t        0x080028a0        0x0
- .glue_7t       0x080028a0        0x0 linker stubs
+.glue_7t        0x08002d0c        0x0
+ .glue_7t       0x08002d0c        0x0 linker stubs
 
-.vfp11_veneer   0x080028a0        0x0
- .vfp11_veneer  0x080028a0        0x0 linker stubs
+.vfp11_veneer   0x08002d0c        0x0
+ .vfp11_veneer  0x08002d0c        0x0 linker stubs
 
-.v4_bx          0x080028a0        0x0
- .v4_bx         0x080028a0        0x0 linker stubs
+.v4_bx          0x08002d0c        0x0
+ .v4_bx         0x08002d0c        0x0 linker stubs
 
-.iplt           0x080028a0        0x0
- .iplt          0x080028a0        0x0 build/main.o
+.iplt           0x08002d0c        0x0
+ .iplt          0x08002d0c        0x0 build/main.o
 
-.rel.dyn        0x080028a0        0x0
- .rel.iplt      0x080028a0        0x0 build/main.o
+.rel.dyn        0x08002d0c        0x0
+ .rel.iplt      0x08002d0c        0x0 build/main.o
 
-.data           0x20000000       0x14 load address 0x080028a0
+.data           0x20000000       0x18 load address 0x08002d0c
                 0x20000000                        . = ALIGN (0x4)
                 0x20000000                        _sdata = .
  *(.data)
@@ -629,181 +666,190 @@ LOAD /usr/lib/gcc/arm-none-eabi/13.2.1/thumb/v7-m/nofp/libgcc.a
                 0x2000000c        0x4 build/system_clock.o
  .data.adc_clock_hz
                 0x20000010        0x4 build/system_clock.o
-                0x20000014                        . = ALIGN (0x4)
-                0x20000014                        _edata = .
+ .data.g_motor_command_gate_status
+                0x20000014        0x1 build/motor_command_gate.o
+                0x20000014                g_motor_command_gate_status
+                0x20000018                        . = ALIGN (0x4)
+ *fill*         0x20000015        0x3 
+                0x20000018                        _edata = .
 
-.igot.plt       0x20000014        0x0 load address 0x080028b4
- .igot.plt      0x20000014        0x0 build/main.o
+.igot.plt       0x20000018        0x0 load address 0x08002d24
+ .igot.plt      0x20000018        0x0 build/main.o
 
-.bss            0x20000014      0x248 load address 0x080028b4
-                0x20000014                        . = ALIGN (0x4)
-                0x20000014                        _sbss = .
+.bss            0x20000018      0x294 load address 0x08002d24
+                0x20000018                        . = ALIGN (0x4)
+                0x20000018                        _sbss = .
  *(.bss)
  *(.bss*)
  .bss.g_clock_status
-                0x20000014        0x1 build/main.o
-                0x20000014                g_clock_status
- *fill*         0x20000015        0x3 
+                0x20000018        0x1 build/main.o
+                0x20000018                g_clock_status
+ *fill*         0x20000019        0x3 
  .bss.g_sysclk_hz
-                0x20000018        0x4 build/main.o
-                0x20000018                g_sysclk_hz
- .bss.g_hclk_hz
                 0x2000001c        0x4 build/main.o
-                0x2000001c                g_hclk_hz
- .bss.g_pclk1_hz
+                0x2000001c                g_sysclk_hz
+ .bss.g_hclk_hz
                 0x20000020        0x4 build/main.o
-                0x20000020                g_pclk1_hz
- .bss.g_pclk2_hz
+                0x20000020                g_hclk_hz
+ .bss.g_pclk1_hz
                 0x20000024        0x4 build/main.o
-                0x20000024                g_pclk2_hz
- .bss.g_adcclk_hz
+                0x20000024                g_pclk1_hz
+ .bss.g_pclk2_hz
                 0x20000028        0x4 build/main.o
-                0x20000028                g_adcclk_hz
- .bss.g_main_loop_reached
+                0x20000028                g_pclk2_hz
+ .bss.g_adcclk_hz
                 0x2000002c        0x4 build/main.o
-                0x2000002c                g_main_loop_reached
+                0x2000002c                g_adcclk_hz
+ .bss.g_main_loop_reached
+                0x20000030        0x4 build/main.o
+                0x20000030                g_main_loop_reached
  .bss.g_system_time_status
-                0x20000030        0x1 build/main.o
-                0x20000030                g_system_time_status
+                0x20000034        0x1 build/main.o
+                0x20000034                g_system_time_status
  .bss.g_uart_diag_status
-                0x20000031        0x1 build/main.o
-                0x20000031                g_uart_diag_status
- *fill*         0x20000032        0x2 
+                0x20000035        0x1 build/main.o
+                0x20000035                g_uart_diag_status
+ *fill*         0x20000036        0x2 
  .bss.g_uart_diag_output_ok
-                0x20000034        0x4 build/main.o
-                0x20000034                g_uart_diag_output_ok
+                0x20000038        0x4 build/main.o
+                0x20000038                g_uart_diag_output_ok
  .bss.g_motor_command_uart_status
-                0x20000038        0x1 build/main.o
-                0x20000038                g_motor_command_uart_status
- *fill*         0x20000039        0x3 
+                0x2000003c        0x1 build/main.o
+                0x2000003c                g_motor_command_uart_status
+ *fill*         0x2000003d        0x3 
  .bss.g_motor_safe_state_requested
-                0x2000003c        0x4 build/motor_outputs.o
-                0x2000003c                g_motor_safe_state_requested
- .bss.g_motor_outputs_safe
                 0x20000040        0x4 build/motor_outputs.o
-                0x20000040                g_motor_outputs_safe
+                0x20000040                g_motor_safe_state_requested
+ .bss.g_motor_outputs_safe
+                0x20000044        0x4 build/motor_outputs.o
+                0x20000044                g_motor_outputs_safe
  .bss.g_motor_node_state
-                0x20000044        0x1 build/motor_node_state.o
-                0x20000044                g_motor_node_state
+                0x20000048        0x1 build/motor_node_state.o
+                0x20000048                g_motor_node_state
  .bss.g_motor_node_failsafe_reason
-                0x20000045        0x1 build/motor_node_state.o
-                0x20000045                g_motor_node_failsafe_reason
- *fill*         0x20000046        0x2 
+                0x20000049        0x1 build/motor_node_state.o
+                0x20000049                g_motor_node_failsafe_reason
+ *fill*         0x2000004a        0x2 
  .bss.g_motor_node_state_initialized
-                0x20000048        0x4 build/motor_node_state.o
-                0x20000048                g_motor_node_state_initialized
- .bss.g_disarmed_enforcement_count
                 0x2000004c        0x4 build/motor_node_state.o
-                0x2000004c                g_disarmed_enforcement_count
- .bss.g_armed_safe_enforcement_count
+                0x2000004c                g_motor_node_state_initialized
+ .bss.g_disarmed_enforcement_count
                 0x20000050        0x4 build/motor_node_state.o
-                0x20000050                g_armed_safe_enforcement_count
- .bss.g_failsafe_enforcement_count
+                0x20000050                g_disarmed_enforcement_count
+ .bss.g_armed_safe_enforcement_count
                 0x20000054        0x4 build/motor_node_state.o
-                0x20000054                g_failsafe_enforcement_count
- .bss.g_disarmed_safety_failure_count
+                0x20000054                g_armed_safe_enforcement_count
+ .bss.g_failsafe_enforcement_count
                 0x20000058        0x4 build/motor_node_state.o
-                0x20000058                g_disarmed_safety_failure_count
- .bss.g_armed_safety_failure_count
+                0x20000058                g_failsafe_enforcement_count
+ .bss.g_disarmed_safety_failure_count
                 0x2000005c        0x4 build/motor_node_state.o
-                0x2000005c                g_armed_safety_failure_count
- .bss.g_failsafe_safety_failure_count
+                0x2000005c                g_disarmed_safety_failure_count
+ .bss.g_armed_safety_failure_count
                 0x20000060        0x4 build/motor_node_state.o
-                0x20000060                g_failsafe_safety_failure_count
- .bss.g_unexpected_state_count
+                0x20000060                g_armed_safety_failure_count
+ .bss.g_failsafe_safety_failure_count
                 0x20000064        0x4 build/motor_node_state.o
-                0x20000064                g_unexpected_state_count
- .bss.g_arm_request_count
+                0x20000064                g_failsafe_safety_failure_count
+ .bss.g_unexpected_state_count
                 0x20000068        0x4 build/motor_node_state.o
-                0x20000068                g_arm_request_count
- .bss.g_arm_accept_count
+                0x20000068                g_unexpected_state_count
+ .bss.g_arm_request_count
                 0x2000006c        0x4 build/motor_node_state.o
-                0x2000006c                g_arm_accept_count
- .bss.g_arm_reject_count
+                0x2000006c                g_arm_request_count
+ .bss.g_arm_accept_count
                 0x20000070        0x4 build/motor_node_state.o
-                0x20000070                g_arm_reject_count
- .bss.g_disarm_request_count
+                0x20000070                g_arm_accept_count
+ .bss.g_arm_reject_count
                 0x20000074        0x4 build/motor_node_state.o
-                0x20000074                g_disarm_request_count
- .bss.g_failsafe_entry_count
+                0x20000074                g_arm_reject_count
+ .bss.g_disarm_request_count
                 0x20000078        0x4 build/motor_node_state.o
-                0x20000078                g_failsafe_entry_count
+                0x20000078                g_disarm_request_count
+ .bss.g_failsafe_entry_count
+                0x2000007c        0x4 build/motor_node_state.o
+                0x2000007c                g_failsafe_entry_count
  .bss.g_fault_record
-                0x2000007c       0x4c build/fault_handlers.o
-                0x2000007c                g_fault_record
+                0x20000080       0x4c build/fault_handlers.o
+                0x20000080                g_fault_record
  .bss.g_milliseconds
-                0x200000c8        0x4 build/system_time.o
-                0x200000c8                g_milliseconds
+                0x200000cc        0x4 build/system_time.o
+                0x200000cc                g_milliseconds
  .bss.uart_diag_ready
-                0x200000cc        0x1 build/uart_diag.o
- *fill*         0x200000cd        0x3 
+                0x200000d0        0x1 build/uart_diag.o
+ *fill*         0x200000d1        0x3 
  .bss.g_latest_received_motor_command
-                0x200000d0       0x14 build/command_receiver.o
-                0x200000d0                g_latest_received_motor_command
+                0x200000d4       0x18 build/command_receiver.o
+                0x200000d4                g_latest_received_motor_command
  .bss.g_command_receiver_stats
-                0x200000e4       0x50 build/command_receiver.o
-                0x200000e4                g_command_receiver_stats
+                0x200000ec       0x54 build/command_receiver.o
+                0x200000ec                g_command_receiver_stats
  .bss.frame_buffer
-                0x20000134       0x13 build/command_receiver.o
- *fill*         0x20000147        0x1 
+                0x20000140       0x14 build/command_receiver.o
  .bss.frame_index
-                0x20000148        0x4 build/command_receiver.o
+                0x20000154        0x4 build/command_receiver.o
  .bss.sequence_history_valid
-                0x2000014c        0x1 build/command_receiver.o
- *fill*         0x2000014d        0x3 
+                0x20000158        0x1 build/command_receiver.o
+ *fill*         0x20000159        0x3 
  .bss.last_accepted_sequence
-                0x20000150        0x4 build/command_receiver.o
+                0x2000015c        0x4 build/command_receiver.o
  .bss.g_uart2_link_diag
-                0x20000154       0x38 build/uart2_link.o
-                0x20000154                g_uart2_link_diag
+                0x20000160       0x38 build/uart2_link.o
+                0x20000160                g_uart2_link_diag
  .bss.uart2_link_ready
-                0x2000018c        0x1 build/uart2_link.o
+                0x20000198        0x1 build/uart2_link.o
  .bss.uart2_tx_enabled
-                0x2000018d        0x1 build/uart2_link.o
+                0x20000199        0x1 build/uart2_link.o
  .bss.uart2_rx_enabled
-                0x2000018e        0x1 build/uart2_link.o
+                0x2000019a        0x1 build/uart2_link.o
  .bss.uart2_tx_dma_busy
-                0x2000018f        0x1 build/uart2_link.o
+                0x2000019b        0x1 build/uart2_link.o
  .bss.tx_dma_buffer
-                0x20000190       0x20 build/uart2_link.o
- .bss.rx_head   0x200001b0        0x2 build/uart2_link.o
- .bss.rx_tail   0x200001b2        0x2 build/uart2_link.o
+                0x2000019c       0x20 build/uart2_link.o
+ .bss.rx_head   0x200001bc        0x2 build/uart2_link.o
+ .bss.rx_tail   0x200001be        0x2 build/uart2_link.o
  .bss.rx_buffer
-                0x200001b4       0x80 build/uart2_link.o
+                0x200001c0       0x80 build/uart2_link.o
  .bss.g_command_watchdog_status
-                0x20000234        0x1 build/command_watchdog.o
-                0x20000234                g_command_watchdog_status
- *fill*         0x20000235        0x3 
+                0x20000240        0x1 build/command_watchdog.o
+                0x20000240                g_command_watchdog_status
+ *fill*         0x20000241        0x3 
  .bss.g_command_watchdog_initialized
-                0x20000238        0x4 build/command_watchdog.o
-                0x20000238                g_command_watchdog_initialized
- .bss.g_command_watchdog_has_valid_command
-                0x2000023c        0x4 build/command_watchdog.o
-                0x2000023c                g_command_watchdog_has_valid_command
- .bss.g_command_watchdog_timeout_ms
-                0x20000240        0x4 build/command_watchdog.o
-                0x20000240                g_command_watchdog_timeout_ms
- .bss.g_command_watchdog_last_valid_sequence
                 0x20000244        0x4 build/command_watchdog.o
-                0x20000244                g_command_watchdog_last_valid_sequence
- .bss.g_command_watchdog_last_valid_timestamp_ms
+                0x20000244                g_command_watchdog_initialized
+ .bss.g_command_watchdog_has_valid_command
                 0x20000248        0x4 build/command_watchdog.o
-                0x20000248                g_command_watchdog_last_valid_timestamp_ms
- .bss.g_command_watchdog_last_age_ms
+                0x20000248                g_command_watchdog_has_valid_command
+ .bss.g_command_watchdog_timeout_ms
                 0x2000024c        0x4 build/command_watchdog.o
-                0x2000024c                g_command_watchdog_last_age_ms
- .bss.g_command_watchdog_refresh_count
+                0x2000024c                g_command_watchdog_timeout_ms
+ .bss.g_command_watchdog_last_valid_sequence
                 0x20000250        0x4 build/command_watchdog.o
-                0x20000250                g_command_watchdog_refresh_count
- .bss.g_command_watchdog_timeout_event_count
+                0x20000250                g_command_watchdog_last_valid_sequence
+ .bss.g_command_watchdog_last_valid_timestamp_ms
                 0x20000254        0x4 build/command_watchdog.o
-                0x20000254                g_command_watchdog_timeout_event_count
- .bss.g_command_watchdog_recovery_count
+                0x20000254                g_command_watchdog_last_valid_timestamp_ms
+ .bss.g_command_watchdog_last_age_ms
                 0x20000258        0x4 build/command_watchdog.o
-                0x20000258                g_command_watchdog_recovery_count
+                0x20000258                g_command_watchdog_last_age_ms
+ .bss.g_command_watchdog_refresh_count
+                0x2000025c        0x4 build/command_watchdog.o
+                0x2000025c                g_command_watchdog_refresh_count
+ .bss.g_command_watchdog_timeout_event_count
+                0x20000260        0x4 build/command_watchdog.o
+                0x20000260                g_command_watchdog_timeout_event_count
+ .bss.g_command_watchdog_recovery_count
+                0x20000264        0x4 build/command_watchdog.o
+                0x20000264                g_command_watchdog_recovery_count
+ .bss.g_motor_command_gate_diag
+                0x20000268       0x40 build/motor_command_gate.o
+                0x20000268                g_motor_command_gate_diag
+ .bss.motor_command_gate_initialized
+                0x200002a8        0x1 build/motor_command_gate.o
  *(COMMON)
-                0x2000025c                        . = ALIGN (0x4)
-                0x2000025c                        _ebss = .
+                0x200002ac                        . = ALIGN (0x4)
+ *fill*         0x200002a9        0x3 
+                0x200002ac                        _ebss = .
 
 /DISCARD/
  *(.comment)
@@ -845,25 +891,28 @@ LOAD linker stubs
                 0x00000249       0x2d build/uart2_link.o
  .ARM.attributes
                 0x00000276       0x2d build/command_watchdog.o
+ .ARM.attributes
+                0x000002a3       0x2d build/motor_command_gate.o
 
-.debug_info     0x00000000     0x2cf3
- .debug_info    0x00000000      0x647 build/main.o
- .debug_info    0x00000647      0x188 build/motor_outputs.o
- .debug_info    0x000007cf      0x3c0 build/motor_node_state.o
- .debug_info    0x00000b8f      0x12f build/freestanding_mem.o
- .debug_info    0x00000cbe       0x83 build/fault_test.o
- .debug_info    0x00000d41      0x464 build/startup_stm32f103c8.o
- .debug_info    0x000011a5      0x298 build/system_clock.o
- .debug_info    0x0000143d      0x343 build/fault_handlers.o
- .debug_info    0x00001780       0xef build/status_led.o
- .debug_info    0x0000186f      0x138 build/system_time.o
- .debug_info    0x000019a7      0x28d build/uart_diag.o
- .debug_info    0x00001c34      0x59b build/command_receiver.o
- .debug_info    0x000021cf      0x349 build/motor_link_protocol.o
- .debug_info    0x00002518      0x578 build/uart2_link.o
- .debug_info    0x00002a90      0x263 build/command_watchdog.o
+.debug_info     0x00000000     0x31f7
+ .debug_info    0x00000000      0x677 build/main.o
+ .debug_info    0x00000677      0x188 build/motor_outputs.o
+ .debug_info    0x000007ff      0x3c0 build/motor_node_state.o
+ .debug_info    0x00000bbf      0x12f build/freestanding_mem.o
+ .debug_info    0x00000cee       0x83 build/fault_test.o
+ .debug_info    0x00000d71      0x464 build/startup_stm32f103c8.o
+ .debug_info    0x000011d5      0x298 build/system_clock.o
+ .debug_info    0x0000146d      0x343 build/fault_handlers.o
+ .debug_info    0x000017b0       0xef build/status_led.o
+ .debug_info    0x0000189f      0x138 build/system_time.o
+ .debug_info    0x000019d7      0x28d build/uart_diag.o
+ .debug_info    0x00001c64      0x66b build/command_receiver.o
+ .debug_info    0x000022cf      0x3a0 build/motor_link_protocol.o
+ .debug_info    0x0000266f      0x578 build/uart2_link.o
+ .debug_info    0x00002be7      0x263 build/command_watchdog.o
+ .debug_info    0x00002e4a      0x3ad build/motor_command_gate.o
 
-.debug_abbrev   0x00000000     0x12c0
+.debug_abbrev   0x00000000     0x1499
  .debug_abbrev  0x00000000      0x1b5 build/main.o
  .debug_abbrev  0x000001b5      0x118 build/motor_outputs.o
  .debug_abbrev  0x000002cd      0x17f build/motor_node_state.o
@@ -875,12 +924,13 @@ LOAD linker stubs
  .debug_abbrev  0x0000094f       0xb4 build/status_led.o
  .debug_abbrev  0x00000a03       0xe4 build/system_time.o
  .debug_abbrev  0x00000ae7      0x114 build/uart_diag.o
- .debug_abbrev  0x00000bfb      0x23c build/command_receiver.o
- .debug_abbrev  0x00000e37      0x19c build/motor_link_protocol.o
- .debug_abbrev  0x00000fd3      0x1d6 build/uart2_link.o
- .debug_abbrev  0x000011a9      0x117 build/command_watchdog.o
+ .debug_abbrev  0x00000bfb      0x250 build/command_receiver.o
+ .debug_abbrev  0x00000e4b      0x1a1 build/motor_link_protocol.o
+ .debug_abbrev  0x00000fec      0x1d6 build/uart2_link.o
+ .debug_abbrev  0x000011c2      0x117 build/command_watchdog.o
+ .debug_abbrev  0x000012d9      0x1c0 build/motor_command_gate.o
 
-.debug_aranges  0x00000000      0x620
+.debug_aranges  0x00000000      0x670
  .debug_aranges
                 0x00000000       0x40 build/main.o
  .debug_aranges
@@ -906,14 +956,16 @@ LOAD linker stubs
  .debug_aranges
                 0x00000490       0x68 build/command_receiver.o
  .debug_aranges
-                0x000004f8       0x58 build/motor_link_protocol.o
+                0x000004f8       0x60 build/motor_link_protocol.o
  .debug_aranges
-                0x00000550       0x88 build/uart2_link.o
+                0x00000558       0x88 build/uart2_link.o
  .debug_aranges
-                0x000005d8       0x48 build/command_watchdog.o
+                0x000005e0       0x48 build/command_watchdog.o
+ .debug_aranges
+                0x00000628       0x48 build/motor_command_gate.o
 
 .debug_rnglists
-                0x00000000      0x467
+                0x00000000      0x4a0
  .debug_rnglists
                 0x00000000       0x2d build/main.o
  .debug_rnglists
@@ -937,76 +989,80 @@ LOAD linker stubs
  .debug_rnglists
                 0x00000306       0x39 build/uart_diag.o
  .debug_rnglists
-                0x0000033f       0x4d build/command_receiver.o
+                0x0000033f       0x4e build/command_receiver.o
  .debug_rnglists
-                0x0000038c       0x40 build/motor_link_protocol.o
+                0x0000038d       0x46 build/motor_link_protocol.o
  .debug_rnglists
-                0x000003cc       0x67 build/uart2_link.o
+                0x000003d3       0x67 build/uart2_link.o
  .debug_rnglists
-                0x00000433       0x34 build/command_watchdog.o
+                0x0000043a       0x34 build/command_watchdog.o
+ .debug_rnglists
+                0x0000046e       0x32 build/motor_command_gate.o
 
-.debug_macro    0x00000000     0x19e5
- .debug_macro   0x00000000       0xa1 build/main.o
- .debug_macro   0x000000a1      0xaea build/main.o
- .debug_macro   0x00000b8b       0x22 build/main.o
- .debug_macro   0x00000bad      0x34e build/main.o
- .debug_macro   0x00000efb       0x16 build/main.o
- .debug_macro   0x00000f11       0x10 build/main.o
- .debug_macro   0x00000f21       0xe1 build/motor_outputs.o
- .debug_macro   0x00001002       0x37 build/motor_node_state.o
- .debug_macro   0x00001039       0x1a build/freestanding_mem.o
- .debug_macro   0x00001053      0x190 build/freestanding_mem.o
- .debug_macro   0x000011e3       0x48 build/fault_test.o
- .debug_macro   0x0000122b       0x30 build/startup_stm32f103c8.o
- .debug_macro   0x0000125b      0x11d build/system_clock.o
- .debug_macro   0x00001378       0x88 build/fault_handlers.o
- .debug_macro   0x00001400       0xa9 build/status_led.o
- .debug_macro   0x000014a9       0x96 build/system_time.o
- .debug_macro   0x0000153f       0xed build/uart_diag.o
- .debug_macro   0x0000162c       0x3f build/command_receiver.o
- .debug_macro   0x0000166b       0x46 build/command_receiver.o
- .debug_macro   0x000016b1       0x77 build/motor_link_protocol.o
- .debug_macro   0x00001728       0x40 build/motor_link_protocol.o
- .debug_macro   0x00001768      0x240 build/uart2_link.o
- .debug_macro   0x000019a8       0x10 build/uart2_link.o
- .debug_macro   0x000019b8       0x2d build/command_watchdog.o
+.debug_macro    0x00000000     0x1a18
+ .debug_macro   0x00000000       0xb0 build/main.o
+ .debug_macro   0x000000b0      0xaea build/main.o
+ .debug_macro   0x00000b9a      0x34e build/main.o
+ .debug_macro   0x00000ee8       0x40 build/main.o
+ .debug_macro   0x00000f28       0x22 build/main.o
+ .debug_macro   0x00000f4a       0x16 build/main.o
+ .debug_macro   0x00000f60       0x10 build/main.o
+ .debug_macro   0x00000f70       0xe1 build/motor_outputs.o
+ .debug_macro   0x00001051       0x37 build/motor_node_state.o
+ .debug_macro   0x00001088       0x1a build/freestanding_mem.o
+ .debug_macro   0x000010a2      0x190 build/freestanding_mem.o
+ .debug_macro   0x00001232       0x48 build/fault_test.o
+ .debug_macro   0x0000127a       0x30 build/startup_stm32f103c8.o
+ .debug_macro   0x000012aa      0x11d build/system_clock.o
+ .debug_macro   0x000013c7       0x88 build/fault_handlers.o
+ .debug_macro   0x0000144f       0xa9 build/status_led.o
+ .debug_macro   0x000014f8       0x96 build/system_time.o
+ .debug_macro   0x0000158e       0xed build/uart_diag.o
+ .debug_macro   0x0000167b       0x53 build/command_receiver.o
+ .debug_macro   0x000016ce       0x7d build/motor_link_protocol.o
+ .debug_macro   0x0000174b      0x240 build/uart2_link.o
+ .debug_macro   0x0000198b       0x10 build/uart2_link.o
+ .debug_macro   0x0000199b       0x2d build/command_watchdog.o
+ .debug_macro   0x000019c8       0x50 build/motor_command_gate.o
 
-.debug_line     0x00000000     0x290a
- .debug_line    0x00000000      0x4ce build/main.o
- .debug_line    0x000004ce      0x1a5 build/motor_outputs.o
- .debug_line    0x00000673      0x33f build/motor_node_state.o
- .debug_line    0x000009b2       0xd1 build/freestanding_mem.o
- .debug_line    0x00000a83       0x92 build/fault_test.o
- .debug_line    0x00000b15      0x483 build/startup_stm32f103c8.o
- .debug_line    0x00000f98      0x2bd build/system_clock.o
- .debug_line    0x00001255      0x2ce build/fault_handlers.o
- .debug_line    0x00001523      0x13b build/status_led.o
- .debug_line    0x0000165e      0x154 build/system_time.o
- .debug_line    0x000017b2      0x2ff build/uart_diag.o
- .debug_line    0x00001ab1      0x43e build/command_receiver.o
- .debug_line    0x00001eef      0x304 build/motor_link_protocol.o
- .debug_line    0x000021f3      0x525 build/uart2_link.o
- .debug_line    0x00002718      0x1f2 build/command_watchdog.o
+.debug_line     0x00000000     0x2ca7
+ .debug_line    0x00000000      0x4fd build/main.o
+ .debug_line    0x000004fd      0x1a5 build/motor_outputs.o
+ .debug_line    0x000006a2      0x33f build/motor_node_state.o
+ .debug_line    0x000009e1       0xd1 build/freestanding_mem.o
+ .debug_line    0x00000ab2       0x92 build/fault_test.o
+ .debug_line    0x00000b44      0x483 build/startup_stm32f103c8.o
+ .debug_line    0x00000fc7      0x2bd build/system_clock.o
+ .debug_line    0x00001284      0x2ce build/fault_handlers.o
+ .debug_line    0x00001552      0x13b build/status_led.o
+ .debug_line    0x0000168d      0x154 build/system_time.o
+ .debug_line    0x000017e1      0x2ff build/uart_diag.o
+ .debug_line    0x00001ae0      0x468 build/command_receiver.o
+ .debug_line    0x00001f48      0x35d build/motor_link_protocol.o
+ .debug_line    0x000022a5      0x525 build/uart2_link.o
+ .debug_line    0x000027ca      0x1f2 build/command_watchdog.o
+ .debug_line    0x000029bc      0x2eb build/motor_command_gate.o
 
-.debug_str      0x00000000     0x7d42
- .debug_str     0x00000000     0x7d42 build/main.o
-                               0x43f4 (size before relaxing)
- .debug_str     0x00007d42     0x407f build/motor_outputs.o
- .debug_str     0x00007d42     0x3e3a build/motor_node_state.o
- .debug_str     0x00007d42     0x32f1 build/freestanding_mem.o
- .debug_str     0x00007d42     0x3a91 build/fault_test.o
- .debug_str     0x00007d42     0x3ecb build/startup_stm32f103c8.o
- .debug_str     0x00007d42     0x413a build/system_clock.o
- .debug_str     0x00007d42     0x4139 build/fault_handlers.o
- .debug_str     0x00007d42     0x3d9b build/status_led.o
- .debug_str     0x00007d42     0x3d72 build/system_time.o
- .debug_str     0x00007d42     0x4058 build/uart_diag.o
- .debug_str     0x00007d42     0x414c build/command_receiver.o
- .debug_str     0x00007d42     0x3f4b build/motor_link_protocol.o
- .debug_str     0x00007d42     0x4924 build/uart2_link.o
- .debug_str     0x00007d42     0x3cb5 build/command_watchdog.o
+.debug_str      0x00000000     0x81c3
+ .debug_str     0x00000000     0x81c3 build/main.o
+                               0x45bc (size before relaxing)
+ .debug_str     0x000081c3     0x407f build/motor_outputs.o
+ .debug_str     0x000081c3     0x3e3a build/motor_node_state.o
+ .debug_str     0x000081c3     0x32f1 build/freestanding_mem.o
+ .debug_str     0x000081c3     0x3a91 build/fault_test.o
+ .debug_str     0x000081c3     0x3ecb build/startup_stm32f103c8.o
+ .debug_str     0x000081c3     0x413a build/system_clock.o
+ .debug_str     0x000081c3     0x4139 build/fault_handlers.o
+ .debug_str     0x000081c3     0x3d9b build/status_led.o
+ .debug_str     0x000081c3     0x3d72 build/system_time.o
+ .debug_str     0x000081c3     0x4058 build/uart_diag.o
+ .debug_str     0x000081c3     0x43c0 build/command_receiver.o
+ .debug_str     0x000081c3     0x4008 build/motor_link_protocol.o
+ .debug_str     0x000081c3     0x4924 build/uart2_link.o
+ .debug_str     0x000081c3     0x3cb5 build/command_watchdog.o
+ .debug_str     0x000081c3     0x40d2 build/motor_command_gate.o
 
-.debug_frame    0x00000000     0x1444
+.debug_frame    0x00000000     0x154c
  .debug_frame   0x00000000       0xc0 build/main.o
  .debug_frame   0x000000c0       0xdc build/motor_outputs.o
  .debug_frame   0x0000019c      0x1a0 build/motor_node_state.o
@@ -1018,7 +1074,8 @@ LOAD linker stubs
  .debug_frame   0x00000c38       0xb4 build/status_led.o
  .debug_frame   0x00000cec       0x78 build/system_time.o
  .debug_frame   0x00000d64      0x110 build/uart_diag.o
- .debug_frame   0x00000e74      0x184 build/command_receiver.o
- .debug_frame   0x00000ff8      0x14c build/motor_link_protocol.o
- .debug_frame   0x00001144      0x218 build/uart2_link.o
- .debug_frame   0x0000135c       0xe8 build/command_watchdog.o
+ .debug_frame   0x00000e74      0x17c build/command_receiver.o
+ .debug_frame   0x00000ff0      0x174 build/motor_link_protocol.o
+ .debug_frame   0x00001164      0x218 build/uart2_link.o
+ .debug_frame   0x0000137c       0xe8 build/command_watchdog.o
+ .debug_frame   0x00001464       0xe8 build/motor_command_gate.o

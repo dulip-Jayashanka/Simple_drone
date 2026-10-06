@@ -1,4 +1,5 @@
 build/main.o: src/main.c include/command_receiver.h \
+ ../motor-link/include/motor_link_protocol.h \
  ../../platform/stm32f103c8/include/uart2_link.h \
  include/command_watchdog.h \
  ../../platform/stm32f103c8/include/fault_handlers.h tests/fault_test.h \
@@ -7,6 +8,7 @@ build/main.o: src/main.c include/command_receiver.h \
  ../../platform/stm32f103c8/include/system_time.h \
  ../../platform/stm32f103c8/include/uart_diag.h
 include/command_receiver.h:
+../motor-link/include/motor_link_protocol.h:
 ../../platform/stm32f103c8/include/uart2_link.h:
 include/command_watchdog.h:
 ../../platform/stm32f103c8/include/fault_handlers.h:
