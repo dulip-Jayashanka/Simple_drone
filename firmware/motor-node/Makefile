@@ -95,6 +95,7 @@ MOTOR_COMMAND_TIMEOUT_MS ?= 20
 # must be physically verified/calibrated before flight use.
 
 MOTOR_PWM_ENABLE ?= 0
+ESC_CALIBRATION_MODE ?= 0
 
 MOTOR_ESC_PWM_HZ ?= 400
 MOTOR_ESC_SAFE_US ?= 1000
@@ -125,6 +126,7 @@ MOTOR_ACTUATOR_TEST_M4 ?= 0
 # ============================================================
 
 BOOLEAN_BUILD_VALUES := \
+	$(ESC_CALIBRATION_MODE) \
 	$(MOTOR_NODE_LINK_ENABLE) \
 	$(MOTOR_NODE_LINK_UART_DEBUG) \
 	$(MOTOR_COMMAND_WATCHDOG_ENABLE) \
@@ -171,9 +173,19 @@ $(error MOTOR_PWM_TEST_MODE and MOTOR_ACTUATOR_TEST_MODE are mutually exclusive)
 endif
 
 
+# Calibration mode is only allowed with PWM and no other output owner.
+ifeq ($(ESC_CALIBRATION_MODE),1)
+ifneq ($(MOTOR_PWM_ENABLE),1)
+$(error ESC_CALIBRATION_MODE requires MOTOR_PWM_ENABLE=1)
+endif
+ifneq ($(MOTOR_PWM_TEST_MODE)$(MOTOR_ACTUATOR_TEST_MODE),00)
+$(error ESC calibration must not be combined with PWM/actuator tests)
+endif
+endif
+
 # Isolated tests are the sole owner of TIM3/CCRx. The command link and
 # watchdog must not compete with them.
-ifneq ($(filter 1,$(MOTOR_PWM_TEST_MODE) $(MOTOR_ACTUATOR_TEST_MODE)),)
+ifneq ($(filter 1,$(MOTOR_PWM_TEST_MODE) $(MOTOR_ACTUATOR_TEST_MODE) $(ESC_CALIBRATION_MODE)),)
 ifneq ($(MOTOR_NODE_LINK_ENABLE),0)
 $(error Phase 6.3 isolated output tests require MOTOR_NODE_LINK_ENABLE=0)
 endif
@@ -186,7 +198,7 @@ endif
 # Active normal PWM is allowed only through the complete local safety
 # chain. There is deliberately no "PWM without watchdog" runtime mode.
 ifeq ($(MOTOR_PWM_ENABLE),1)
-ifeq ($(MOTOR_PWM_TEST_MODE)$(MOTOR_ACTUATOR_TEST_MODE),00)
+ifeq ($(MOTOR_PWM_TEST_MODE)$(MOTOR_ACTUATOR_TEST_MODE)$(ESC_CALIBRATION_MODE),000)
 ifneq ($(MOTOR_NODE_LINK_ENABLE),1)
 $(error Normal MOTOR_PWM_ENABLE=1 requires MOTOR_NODE_LINK_ENABLE=1)
 endif
@@ -262,6 +274,10 @@ OBJECTS += \
 endif
 
 
+ifeq ($(ESC_CALIBRATION_MODE),1)
+OBJECTS += $(BUILD_DIR)/esc_calibration.o
+endif
+
 ifeq ($(MOTOR_PWM_ENABLE),1)
 OBJECTS += \
 	$(BUILD_DIR)/motor_pwm.o \
@@ -301,6 +317,7 @@ CFLAGS := \
 	-DMOTOR_COMMAND_WATCHDOG_ENABLE=$(MOTOR_COMMAND_WATCHDOG_ENABLE) \
 	-DMOTOR_COMMAND_TIMEOUT_MS=$(MOTOR_COMMAND_TIMEOUT_MS) \
 	-DMOTOR_PWM_ENABLE=$(MOTOR_PWM_ENABLE) \
+	-DESC_CALIBRATION_MODE=$(ESC_CALIBRATION_MODE) \
 	-DMOTOR_ESC_PWM_HZ=$(MOTOR_ESC_PWM_HZ) \
 	-DMOTOR_ESC_SAFE_US=$(MOTOR_ESC_SAFE_US) \
 	-DMOTOR_ESC_MIN_US=$(MOTOR_ESC_MIN_US) \
@@ -373,6 +390,8 @@ endif
 # PHONY TARGETS
 # ============================================================
 
+ .PHONY: esc-calibration
+
 .PHONY: all clean size inspect \
 	test-normal \
 	test-default \
@@ -392,6 +411,9 @@ endif
 
 all: $(ELF) $(BIN) $(HEX) $(LIST) $(SYMBOLS) size
 
+esc-calibration:
+	$(MAKE) ESC_CALIBRATION_MODE=1 MOTOR_PWM_ENABLE=1 MOTOR_ESC_PWM_HZ=50 MOTOR_NODE_LINK_ENABLE=0 MOTOR_COMMAND_WATCHDOG_ENABLE=0 MOTOR_PWM_TEST_MODE=0 MOTOR_ACTUATOR_TEST_MODE=0 all
+
 
 $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
@@ -410,6 +432,7 @@ $(CONFIG_STAMP): FORCE | $(BUILD_DIR)
 		'MOTOR_COMMAND_WATCHDOG_ENABLE=$(MOTOR_COMMAND_WATCHDOG_ENABLE)' \
 		'MOTOR_COMMAND_TIMEOUT_MS=$(MOTOR_COMMAND_TIMEOUT_MS)' \
 		'MOTOR_PWM_ENABLE=$(MOTOR_PWM_ENABLE)' \
+		'ESC_CALIBRATION_MODE=$(ESC_CALIBRATION_MODE)' \
 		'MOTOR_ESC_PWM_HZ=$(MOTOR_ESC_PWM_HZ)' \
 		'MOTOR_ESC_SAFE_US=$(MOTOR_ESC_SAFE_US)' \
 		'MOTOR_ESC_MIN_US=$(MOTOR_ESC_MIN_US)' \
@@ -474,6 +497,9 @@ $(BUILD_DIR)/motor_command_gate.o: \
 	$(INC_DIR)/motor_node_state.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+
+$(BUILD_DIR)/esc_calibration.o: $(SRC_DIR)/esc_calibration.c $(INC_DIR)/motor_pwm.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/motor_pwm.o: \
 	$(SRC_DIR)/motor_pwm.c \
