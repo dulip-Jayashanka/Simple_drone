@@ -26,6 +26,10 @@
 #define MOTOR_PWM_TEST_MODE 0
 #endif
 
+#ifndef ESC_CALIBRATION_MODE
+#define ESC_CALIBRATION_MODE 0
+#endif
+
 #ifndef MOTOR_ACTUATOR_TEST_MODE
 #define MOTOR_ACTUATOR_TEST_MODE 0
 #endif
@@ -42,7 +46,8 @@
 
 #if MOTOR_PWM_ENABLE && \
     (MOTOR_PWM_TEST_MODE || \
-     MOTOR_ACTUATOR_TEST_MODE)
+     MOTOR_ACTUATOR_TEST_MODE || \
+     ESC_CALIBRATION_MODE)
 
 #define MOTOR_PHASE63_ISOLATED_TEST 1
 
@@ -68,6 +73,11 @@
 #if MOTOR_PWM_ENABLE
 #include "motor_actuator.h"
 #include "motor_pwm.h"
+#endif
+
+#if ESC_CALIBRATION_MODE
+void esc_calibration_init(void);
+void esc_calibration_process(void);
 #endif
 
 
@@ -623,7 +633,11 @@ main(void)
     }
 
 
-#if MOTOR_PWM_TEST_MODE
+#if ESC_CALIBRATION_MODE
+
+    esc_calibration_init();
+
+#elif MOTOR_PWM_TEST_MODE
 
     if (!motor_pwm_set_us(
             (uint16_t)MOTOR_PWM_TEST_M1_US,
@@ -844,6 +858,10 @@ main(void)
         current_time_ms =
             millis();
 
+
+#if ESC_CALIBRATION_MODE
+        esc_calibration_process();
+#endif
 
 #if !MOTOR_PHASE63_ISOLATED_TEST
 
